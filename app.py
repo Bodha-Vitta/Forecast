@@ -8,7 +8,7 @@ st.title("📊 Enterprise Strategic Sales Forecasting Cockpit")
 st.write("Feed your baseline monthly tracking indices below. The engine calculates horizontal revenue models and volumetrics automatically.")
 
 # -----------------------------------------------------------------------------
-# SIDEBAR CONTROLS: REVENUE COMPUNDING VECTORS
+# SIDEBAR CONTROLS: REVENUE COMPOUNDING VECTORS
 # -----------------------------------------------------------------------------
 st.sidebar.header("📈 Volumetric Growth Cockpit (%)")
 st.sidebar.write("Configure annual compounding factors applied to prior year average monthly run-rates:")
@@ -33,7 +33,7 @@ for p in products:
     for period in input_periods:
         is_month = period.startswith("M")
         
-        # Determine clean contextual default baselines to match your reference image structure
+        # Default baseline setups based on your layout data markers
         if p == "P1":
             default_qty = 1200.0 if is_month else None
             default_rate = 169800.0
@@ -86,15 +86,15 @@ for p in products:
     p_df = edited_ui[edited_ui["Product ID"] == p]
     
     # 1. Parse Baseline Matrices via key filters
-    q_months = [safe_float(p_df[p_df["Timeline Horizon"] == m]["Sales Qty (M1-M12 Active Only)"].values[0]) for m in months]
-    r_months = [safe_float(p_df[p_df["Timeline Horizon"] == m]["Absolute Price/Rate (Rs)"].values[0]) for m in months]
+    q_months = [safe_float(p_df[p_df["Timeline Horizon"] == m]["Sales Qty (M1-M12 Active Only)"].values) for m in months]
+    r_months = [safe_float(p_df[p_df["Timeline Horizon"] == m]["Absolute Price/Rate (Rs)"].values) for m in months]
     v_months = [q * r for q, r in zip(q_months, r_months)]
     
     # 2. Parse Future Price Vector Points
-    r_y2 = safe_float(p_df[p_df["Timeline Horizon"] == "Year 2"]["Absolute Price/Rate (Rs)"].values[0])
-    r_y3 = safe_float(p_df[p_df["Timeline Horizon"] == "Year 3"]["Absolute Price/Rate (Rs)"].values[0])
-    r_y4 = safe_float(p_df[p_df["Timeline Horizon"] == "Year 4"]["Absolute Price/Rate (Rs)"].values[0])
-    r_y5 = safe_float(p_df[p_df["Timeline Horizon"] == "Year 5"]["Absolute Price/Rate (Rs)"].values[0])
+    r_y2 = safe_float(p_df[p_df["Timeline Horizon"] == "Year 2"]["Absolute Price/Rate (Rs)"].values)
+    r_y3 = safe_float(p_df[p_df["Timeline Horizon"] == "Year 3"]["Absolute Price/Rate (Rs)"].values)
+    r_y4 = safe_float(p_df[p_df["Timeline Horizon"] == "Year 4"]["Absolute Price/Rate (Rs)"].values)
+    r_y5 = safe_float(p_df[p_df["Timeline Horizon"] == "Year 5"]["Absolute Price/Rate (Rs)"].values)
     
     # 3. Compile Year 1 Aggregations
     y1_q_total = sum(q_months)
@@ -118,14 +118,14 @@ for p in products:
     rev_matrix[p] = v_horizon
 
 # -----------------------------------------------------------------------------
-# TABLE 1: REVENUE VALUE VIEW - Forecasting : Sales(M)
+# TABLE 1: REVENUE VALUE VIEW - Forecasting : Sales (Lacs)
 # -----------------------------------------------------------------------------
 st.markdown("---")
-st.subheader("📊 Forecasting : Sales(M)")
-st.write("Reflects absolute calculated revenue values scaled in standard Indian Currency Format:")
+st.subheader("📊 Forecasting : Sales (Lacs)")
+st.write("Calculates total absolute revenue values formatted in Lakhs (L):")
 
-# Convert values to Millions to clean up the visual display layout
-df_rev = pd.DataFrame({p: [val / 1000000.0 for val in rev_matrix[p]] for p in products}, index=display_columns).T
+# Convert currency numbers to Lakhs (divide by 1,00,000)
+df_rev = pd.DataFrame({p: [val / 100000.0 for val in rev_matrix[p]] for p in products}, index=display_columns).T
 df_rev.insert(0, "Product", df_rev.index)
 
 # Add Total Row
@@ -134,7 +134,7 @@ for col in display_columns:
     rev_total_row[col] = df_rev[col].sum()
 df_rev = pd.concat([df_rev, pd.DataFrame([rev_total_row])], ignore_index=True)
 
-st.dataframe(df_rev.style.format({col: "{:,.2f} M" for col in display_columns}), use_container_width=True, hide_index=True)
+st.dataframe(df_rev.style.format({col: "{:,.2f} L" for col in display_columns}), use_container_width=True, hide_index=True)
 
 # -----------------------------------------------------------------------------
 # TABLE 2: QUANTITY RUN VIEW - Forecasting : Qt(T)
