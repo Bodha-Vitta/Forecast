@@ -33,16 +33,9 @@ for p in products:
     for period in input_periods:
         is_month = period.startswith("M")
         
-        # Default baseline setups based on your layout data markers
-        if p == "P1":
-            default_qty = 1200.0 if is_month else None
-            default_rate = 169800.0
-        elif p == "P2":
-            default_qty = 50.0 if is_month else None
-            default_rate = 40000.0
-        else:
-            default_qty = 100.0 if is_month else None
-            default_rate = 400100.0
+        # Globally standardized user-requested defaults: 1000 Units and Rs 5000 Rate
+        default_qty = 1000.0 if is_month else None
+        default_rate = 5000.0
             
         init_rows.append({
             "Product ID": p,
@@ -66,69 +59,73 @@ edited_ui = st.data_editor(
 )
 
 # -----------------------------------------------------------------------------
-# FINANCIAL ANALYTICS & CALCULATION LAYER
+# FINANCIAL ANALYTICS & SAFE ROW-BY-ROW PARSING LAYER
 # -----------------------------------------------------------------------------
 display_columns = months + ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5"]
+
+def safe_float(val):
+    if pd.isna(val) or val == "" or val is None:
+        return 0.0
+    try:
+        return float(val)
+    except:
+        return 0.0
+
+# Initialize blank storage dictionaries structured by product name keys
+product_data_store = {p: {"qty": {}, "rate": {}} for p in products}
+
+# Parse data safely by looping through table rows directly
+for idx, row in edited_ui.iterrows():
+    p_id = row["Product ID"]
+    horizon = row["Timeline Horizon"]
+    
+    if p_id in product_data_store:
+        product_data_store[p_id]["qty"][horizon] = safe_float(row["Sales Qty (M1-M12 Active Only)"])
+        product_data_store[p_id]["rate"][horizon] = safe_float(row["Absolute Price/Rate (Rs)"])
 
 qty_matrix = {}
 rate_matrix = {}
 rev_matrix = {}
 
-def safe_float(val):
-    try:
-        if pd.isna(val) or val == "" or val is None:
-            return 0.0
-        return float(val)
-    except:
-        return 0.0
-
 for p in products:
-    p_df = edited_ui[edited_ui["Product ID"] == p]
-    
-    # 1. Parse Baseline Matrices via key filters
-    q_months = [safe_float(p_df[p_df["Timeline Horizon"] == m]["Sales Qty (M1-M12 Active Only)"].values) for m in months]
-    r_months = [safe_float(p_df[p_df["Timeline Horizon"] == m]["Absolute Price/Rate (Rs)"].values) for m in months]
+    # 1. Rebuild arrays sequentially from the storage dictionaries
+    q_months = [product_data_store[p]["qty"].get(m, 0.0) for m in months]
+    r_months = [product_data_store[p]["rate"].get(m, 0.0) for m in months]
     v_months = [q * r for q, r in zip(q_months, r_months)]
     
-    # 2. Parse Future Price Vector Points
-    r_y2 = safe_float(p_df[p_df["Timeline Horizon"] == "Year 2"]["Absolute Price/Rate (Rs)"].values)
-    r_y3 = safe_float(p_df[p_df["Timeline Horizon"] == "Year 3"]["Absolute Price/Rate (Rs)"].values)
-    r_y4 = safe_float(p_df[p_df["Timeline Horizon"] == "Year 4"]["Absolute Price/Rate (Rs)"].values)
-    r_y5 = safe_float(p_df[p_df["Timeline Horizon"] == "Year 5"]["Absolute Price/Rate (Rs)"].values)
+    # 2. Grab future absolute rates safely
+    r_y2 = product_data_store[p]["rate"].get("Year 2", 0.0)
+    r_y3 = product_data_store[p]["rate"].get("Year 3", 0.0)
+    r_y4 = product_data_store[p]["rate"].get("Year 4", 0.0)
+    r_y5 = product_data_store[p]["rate"].get("Year 5", 0.0)
     
-    # 3. Compile Year 1 Aggregations
+    # 3. Compute Year 1 Summary
     y1_q_total = sum(q_months)
     y1_v_total = sum(v_months)
     y1_r_weighted_avg = y1_v_total / y1_q_total if y1_q_total > 0 else 0.0
     y1_q_avg_monthly = y1_q_total / 12.0
     
-    # 4. Generate Compounding Volumetric Run-rates
+    # 4. Compute Volume Compounding Chain Projections
     y2_q = (y1_q_avg_monthly * (1 + g_y2)) * 12
     y3_q = ((y2_q / 12.0) * (1 + g_y3)) * 12
     y4_q = ((y3_q / 12.0) * (1 + g_y4)) * 12
     y5_q = ((y4_q / 12.0) * (1 + g_y5)) * 12
     
-    # 5. Build Unified Horizontal Vectors
-    q_horizon = q_months + [y1_q_total, y2_q, y3_q, y4_q, y5_q]
-    r_horizon = r_months + [y1_r_weighted_avg, r_y2, r_y3, r_y4, r_y5]
-    v_horizon = v_months + [y1_v_total, (y2_q * r_y2), (y3_q * r_y3), (y4_q * r_y4), (y5_q * r_y5)]
-    
-    qty_matrix[p] = q_horizon
-    rate_matrix[p] = r_horizon
-    rev_matrix[p] = v_horizon
+    # 5. Build Final Structural Horizons
+    qty_matrix[p] = q_months + [y1_q_total, y2_q, y3_q, y4_q, y5_q]
+    rate_matrix[p] = r_months + [y1_r_weighted_avg, r_y2, r_y3, r_y4, r_y5]
+    rev_matrix[p] = v_months + [y1_v_total, (y2_q * r_y2), (y3_q * r_y3), (y4_q * r_y4), (y5_q * r_y5)]
 
 # -----------------------------------------------------------------------------
-# TABLE 1: REVENUE VALUE VIEW - Forecasting : Sales (Lacs)
+# DISPLAY REVENUE TABLE: Forecasting : Sales (Lacs)
 # -----------------------------------------------------------------------------
 st.markdown("---")
 st.subheader("📊 Forecasting : Sales (Lacs)")
 st.write("Calculates total absolute revenue values formatted in Lakhs (L):")
 
-# Convert currency numbers to Lakhs (divide by 1,00,000)
 df_rev = pd.DataFrame({p: [val / 100000.0 for val in rev_matrix[p]] for p in products}, index=display_columns).T
 df_rev.insert(0, "Product", df_rev.index)
 
-# Add Total Row
 rev_total_row = {"Product": "Total"}
 for col in display_columns:
     rev_total_row[col] = df_rev[col].sum()
@@ -137,7 +134,7 @@ df_rev = pd.concat([df_rev, pd.DataFrame([rev_total_row])], ignore_index=True)
 st.dataframe(df_rev.style.format({col: "{:,.2f} L" for col in display_columns}), use_container_width=True, hide_index=True)
 
 # -----------------------------------------------------------------------------
-# TABLE 2: QUANTITY RUN VIEW - Forecasting : Qt(T)
+# DISPLAY QUANTITY TABLE: Forecasting : Qt(T)
 # -----------------------------------------------------------------------------
 st.markdown("---")
 st.subheader("📦 Forecasting : Qt(T)")
@@ -146,7 +143,6 @@ st.write("Tracks total volumetric material physical distributions across the hor
 df_qty = pd.DataFrame(qty_matrix, index=display_columns).T
 df_qty.insert(0, "Product", df_qty.index)
 
-# Add Total Row
 qty_total_row = {"Product": "Total"}
 for col in display_columns:
     qty_total_row[col] = df_qty[col].sum()
@@ -155,7 +151,7 @@ df_qty = pd.concat([df_qty, pd.DataFrame([qty_total_row])], ignore_index=True)
 st.dataframe(df_qty.style.format({col: "{:,.0f}" for col in display_columns}), use_container_width=True, hide_index=True)
 
 # -----------------------------------------------------------------------------
-# TABLE 3: RATE PERSPECTIVE INDEX - Forecasting : Price/T
+# DISPLAY RATES TABLE: Forecasting : Price/T
 # -----------------------------------------------------------------------------
 st.markdown("---")
 st.subheader("💵 Forecasting : Price/T")
