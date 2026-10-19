@@ -1,63 +1,54 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 
-st.set_page_config(page_title="Sales Forecasting Engine", layout="wide")
+st.set_page_config(page_title="Enterprise Sales Forecasting", layout="wide")
 
-st.title("📊 Strategic Sales Forecasting Engine")
-st.write("Configure baseline inputs and future price targets below. Future quantity projections are automatically calculated based on your sidebar growth rates.")
+st.title("📊 Enterprise Strategic Sales Forecasting Cockpit")
+st.write("Feed your baseline monthly tracking indices below. The engine calculates horizontal revenue models and volumetrics automatically.")
 
 # -----------------------------------------------------------------------------
-# SIDEBAR CONTROLS: QUANTITY GROWTH FACTORS ONLY
+# SIDEBAR CONTROLS: REVENUE COMPUNDING VECTORS
 # -----------------------------------------------------------------------------
-st.sidebar.header("📈 Volume Growth Targets (%)")
-st.sidebar.write("Applied on top of the calculated prior year average monthly run-rate")
+st.sidebar.header("📈 Volumetric Growth Cockpit (%)")
+st.sidebar.write("Configure annual compounding factors applied to prior year average monthly run-rates:")
 g_y2 = st.sidebar.number_input("Year 2 Volume Growth (%)", value=5.0) / 100.0
 g_y3 = st.sidebar.number_input("Year 3 Volume Growth (%)", value=5.0) / 100.0
 g_y4 = st.sidebar.number_input("Year 4 Volume Growth (%)", value=5.0) / 100.0
 g_y5 = st.sidebar.number_input("Year 5 Volume Growth (%)", value=5.0) / 100.0
 
 # -----------------------------------------------------------------------------
-# INTERACTIVE DATA MATRIX: INTEGRATED DATA ENTRY FEEDER
+# INTERACTIVE DATA GRID: BASELINE PARAMETERS
 # -----------------------------------------------------------------------------
-st.subheader("📝 Baseline Months (Qty & Rate) & Future Absolute Price Input Matrix")
-st.write("Directly edit **Sales Qty** and **Rates** for M1-M12. For Years 2 to 5, provide **only** your absolute price targets:")
+st.subheader("📝 Baseline Operational Parameters & Future Absolute Rates")
+st.write("Directly click and input **Quantity** and **Absolute Pricing Rates (Rs)** inside the master data matrix:")
 
 products = ["P1", "P2", "P3"]
 months = [f"M{i}" for i in range(1, 13)]
 future_years = ["Year 2", "Year 3", "Year 4", "Year 5"]
+input_periods = months + future_years
 
 init_rows = []
 for p in products:
-    # 1. Add Month entries (Both Quantity and Rate are active)
-    for m in months:
+    for period in input_periods:
+        is_month = period.startswith("M")
+        
+        # Determine clean contextual default baselines to match your reference image structure
         if p == "P1":
-            default_rate = 50.0
+            default_qty = 1200.0 if is_month else None
+            default_rate = 169800.0
         elif p == "P2":
-            default_rate = 120.0
+            default_qty = 50.0 if is_month else None
+            default_rate = 40000.0
         else:
-            default_rate = 75.0
+            default_qty = 100.0 if is_month else None
+            default_rate = 400100.0
             
         init_rows.append({
-            "Product": p,
-            "Period/Horizon": m,
-            "Sales Qty (M1-M12 Only)": 10000.0,
-            "Absolute Rate / Price (Rs)": default_rate
-        })
-    
-    # 2. Add Future Year entries (Quantity input is hidden, only Price is active)
-    for y in future_years:
-        if p == "P1":
-            default_rate = 50.0
-        elif p == "P2":
-            default_rate = 120.0
-        else:
-            default_rate = 75.0
-            
-        init_rows.append({
-            "Product": p,
-            "Period/Horizon": y,
-            "Sales Qty (M1-M12 Only)": None,  # Hidden field placeholder
-            "Absolute Rate / Price (Rs)": default_rate
+            "Product ID": p,
+            "Timeline Horizon": period,
+            "Sales Qty (M1-M12 Active Only)": default_qty,
+            "Absolute Price/Rate (Rs)": default_rate
         })
 
 df_feeder = pd.DataFrame(init_rows)
@@ -67,18 +58,21 @@ edited_ui = st.data_editor(
     hide_index=True, 
     use_container_width=True,
     column_config={
-        "Product": st.column_config.TextColumn(disabled=True),
-        "Period/Horizon": st.column_config.TextColumn(disabled=True),
-        # Disables and cleanly wipes out entry edit capability for future year quantities
-        "Sales Qty (M1-M12 Only)": st.column_config.NumberColumn(format="%d"),
+        "Product ID": st.column_config.TextColumn(disabled=True),
+        "Timeline Horizon": st.column_config.TextColumn(disabled=True),
+        "Sales Qty (M1-M12 Active Only)": st.column_config.NumberColumn(format="%d"),
+        "Absolute Price/Rate (Rs)": st.column_config.NumberColumn(format="Rs %d"),
     }
 )
 
 # -----------------------------------------------------------------------------
-# CALCULATION COMPILING ENGINE
+# FINANCIAL ANALYTICS & CALCULATION LAYER
 # -----------------------------------------------------------------------------
 display_columns = months + ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5"]
-compiled_records = []
+
+qty_matrix = {}
+rate_matrix = {}
+rev_matrix = {}
 
 def safe_float(val):
     try:
@@ -88,59 +82,85 @@ def safe_float(val):
     except:
         return 0.0
 
-edited_ui_clean = edited_ui.reset_index(drop=True)
-rows_per_product = 16  # 12 months + 4 future year slots
-
-for idx, p in enumerate(products):
-    start_row = idx * rows_per_product
+for p in products:
+    p_df = edited_ui[edited_ui["Product ID"] == p]
     
-    # Extract Month vectors safely by location index
-    q_months = [safe_float(edited_ui_clean.loc[start_row + m, "Sales Qty (M1-M12 Only)"]) for m in range(12)]
-    r_months = [safe_float(edited_ui_clean.loc[start_row + m, "Absolute Rate / Price (Rs)"]) for m in range(12)]
+    # 1. Parse Baseline Matrices via key filters
+    q_months = [safe_float(p_df[p_df["Timeline Horizon"] == m]["Sales Qty (M1-M12 Active Only)"].values[0]) for m in months]
+    r_months = [safe_float(p_df[p_df["Timeline Horizon"] == m]["Absolute Price/Rate (Rs)"].values[0]) for m in months]
     v_months = [q * r for q, r in zip(q_months, r_months)]
     
-    # Extract future year rates directly from their specific index slots
-    r_y2 = safe_float(edited_ui_clean.loc[start_row + 12, "Absolute Rate / Price (Rs)"])
-    r_y3 = safe_float(edited_ui_clean.loc[start_row + 13, "Absolute Rate / Price (Rs)"])
-    r_y4 = safe_float(edited_ui_clean.loc[start_row + 14, "Absolute Rate / Price (Rs)"])
-    r_y5 = safe_float(edited_ui_clean.loc[start_row + 15, "Absolute Rate / Price (Rs)"])
+    # 2. Parse Future Price Vector Points
+    r_y2 = safe_float(p_df[p_df["Timeline Horizon"] == "Year 2"]["Absolute Price/Rate (Rs)"].values[0])
+    r_y3 = safe_float(p_df[p_df["Timeline Horizon"] == "Year 3"]["Absolute Price/Rate (Rs)"].values[0])
+    r_y4 = safe_float(p_df[p_df["Timeline Horizon"] == "Year 4"]["Absolute Price/Rate (Rs)"].values[0])
+    r_y5 = safe_float(p_df[p_df["Timeline Horizon"] == "Year 5"]["Absolute Price/Rate (Rs)"].values[0])
     
-    # Process Year 1 Horizon math
+    # 3. Compile Year 1 Aggregations
     y1_q_total = sum(q_months)
     y1_v_total = sum(v_months)
     y1_r_weighted_avg = y1_v_total / y1_q_total if y1_q_total > 0 else 0.0
     y1_q_avg_monthly = y1_q_total / 12.0
     
-    # Automatically compute Year 2 to Year 5 quantities based on sidebar growth % parameters
+    # 4. Generate Compounding Volumetric Run-rates
     y2_q = (y1_q_avg_monthly * (1 + g_y2)) * 12
     y3_q = ((y2_q / 12.0) * (1 + g_y3)) * 12
     y4_q = ((y3_q / 12.0) * (1 + g_y4)) * 12
     y5_q = ((y4_q / 12.0) * (1 + g_y5)) * 12
     
+    # 5. Build Unified Horizontal Vectors
     q_horizon = q_months + [y1_q_total, y2_q, y3_q, y4_q, y5_q]
     r_horizon = r_months + [y1_r_weighted_avg, r_y2, r_y3, r_y4, r_y5]
     v_horizon = v_months + [y1_v_total, (y2_q * r_y2), (y3_q * r_y3), (y4_q * r_y4), (y5_q * r_y5)]
     
-    compiled_records.append([p, "Sales Qty (Units)"] + q_horizon)
-    compiled_records.append([p, "Unit Rate (Rs)"] + r_horizon)
-    compiled_records.append([p, "Revenue Value (Rs)"] + v_horizon)
-
-df_display = pd.DataFrame(compiled_records, columns=["Product", "Metric Type"] + display_columns)
+    qty_matrix[p] = q_horizon
+    rate_matrix[p] = r_horizon
+    rev_matrix[p] = v_horizon
 
 # -----------------------------------------------------------------------------
-# GRAPH PRESENTATION INTERFACE
+# TABLE 1: REVENUE VALUE VIEW - Forecasting : Sales(M)
 # -----------------------------------------------------------------------------
 st.markdown("---")
-st.subheader("📋 Consolidated Sales & Revenue Analytical Forecast Horizon")
+st.subheader("📊 Forecasting : Sales(M)")
+st.write("Reflects absolute calculated revenue values scaled in standard Indian Currency Format:")
 
-st.dataframe(df_display.style.format(subset=display_columns, formatter="{:,.2f}"), use_container_width=True, hide_index=True)
+# Convert values to Millions to clean up the visual display layout
+df_rev = pd.DataFrame({p: [val / 1000000.0 for val in rev_matrix[p]] for p in products}, index=display_columns).T
+df_rev.insert(0, "Product", df_rev.index)
 
-grand_total_revenue_y1 = df_display[df_display["Metric Type"] == "Revenue Value (Rs)"]["Year 1"].sum()
-grand_total_revenue_y5 = df_display[df_display["Metric Type"] == "Revenue Value (Rs)"]["Year 5"].sum()
+# Add Total Row
+rev_total_row = {"Product": "Total"}
+for col in display_columns:
+    rev_total_row[col] = df_rev[col].sum()
+df_rev = pd.concat([df_rev, pd.DataFrame([rev_total_row])], ignore_index=True)
 
+st.dataframe(df_rev.style.format({col: "{:,.2f} M" for col in display_columns}), use_container_width=True, hide_index=True)
+
+# -----------------------------------------------------------------------------
+# TABLE 2: QUANTITY RUN VIEW - Forecasting : Qt(T)
+# -----------------------------------------------------------------------------
 st.markdown("---")
-col1, col2 = st.columns(2)
-with col1:
-    st.metric("📦 GRAND TOTAL REVENUE (Year 1 Baseline)", f"Rs {grand_total_revenue_y1 / 10000000:.2f} Cr")
-with col2:
-    st.metric("🚀 PROJECTED REVENUE (Year 5 Horizon)", f"Rs {grand_total_revenue_y5 / 10000000:.2f} Cr")
+st.subheader("📦 Forecasting : Qt(T)")
+st.write("Tracks total volumetric material physical distributions across the horizon roadmap:")
+
+df_qty = pd.DataFrame(qty_matrix, index=display_columns).T
+df_qty.insert(0, "Product", df_qty.index)
+
+# Add Total Row
+qty_total_row = {"Product": "Total"}
+for col in display_columns:
+    qty_total_row[col] = df_qty[col].sum()
+df_qty = pd.concat([df_qty, pd.DataFrame([qty_total_row])], ignore_index=True)
+
+st.dataframe(df_qty.style.format({col: "{:,.0f}" for col in display_columns}), use_container_width=True, hide_index=True)
+
+# -----------------------------------------------------------------------------
+# TABLE 3: RATE PERSPECTIVE INDEX - Forecasting : Price/T
+# -----------------------------------------------------------------------------
+st.markdown("---")
+st.subheader("💵 Forecasting : Price/T")
+st.write("Reflects tracking pricing indexes (Weighted Average for Year 1, Absolute for Year 2-5):")
+
+df_rate = pd.DataFrame(rate_matrix, index=display_columns).T
+df_rate.insert(0, "Product", df_rate.index)
+st.dataframe(df_rate.style.format({col: "Rs {:,.2f}" for col in display_columns}), use_container_width=True, hide_index=True)
