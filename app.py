@@ -247,7 +247,3 @@ data=output_buffer.getvalue(),
 file_name="Sales_And_Production_Forecasting_Report.xlsx",
 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
-
-<FollowUp>
-Go ahead and run `streamlit run app.py` now! Let me know if everything **renders correctly** on your side.
-</FollowUp>
