@@ -1,4 +1,4 @@
-import streamlit as st
+import streamlit st
 import pandas as pd
 import numpy as np
 from io import BytesIO
@@ -49,7 +49,7 @@ if "sidebar_rate_df" not in st.session_state:
         "P3": [450.0] * 16
     })
 
-# NEW: 3. Initialize Product Long-Term Price Inflation Feeder Grid Matrix
+# 3. Initialize Product Long-Term Price Inflation Feeder Grid Matrix
 if "sidebar_fg_inflation_df" not in st.session_state:
     st.session_state.sidebar_fg_inflation_df = pd.DataFrame({
         "Timeline": ["Year 2 FG Price Inflation (%)", "Year 3 FG Price Inflation (%)", "Year 4 FG Price Inflation (%)", "Year 5 FG Price Inflation (%)"],
@@ -106,10 +106,15 @@ if "pl_nodes_state" not in st.session_state:
     st.session_state.pl_nodes_state = {
         "1": 1, "2": 1, "3": 1, "4": 1, "5": 1, "6": 1, "7": 1
     }
+
+if "active_tab_sync" not in st.session_state:
+    st.session_state.active_tab_sync = "Revenue"
+
+if "pl_depth_level" not in st.session_state:
+    st.session_state.pl_depth_level = 1
 # -----------------------------------------------------------------------------
 # CHAPTER 2: SIDEBAR CONTROL PANEL DESK
 # -----------------------------------------------------------------------------
-# Read active page tracking parameters to automate context switching
 if st.session_state.active_tab_sync in ["Revenue", "FG"]:
     target_context_radio_str = "Sales / FG Feed"
 elif st.session_state.active_tab_sync == "RM Qt":
@@ -213,7 +218,6 @@ def safe_float(val):
 for p in products:
     q_months = [safe_float(edited_qty_df.loc[edited_qty_df["Timeline"] == m, p].values) for m in months]
     
-    # Read product price inflation percentages from editor
     p_inf_y2 = safe_float(edited_fg_inflation_df.loc[edited_fg_inflation_df["Timeline"] == "Year 2 FG Price Inflation (%)", p].values) / 100.0
     p_inf_y3 = safe_float(edited_fg_inflation_df.loc[edited_fg_inflation_df["Timeline"] == "Year 3 FG Price Inflation (%)", p].values) / 100.0
     p_inf_y4 = safe_float(edited_fg_inflation_df.loc[edited_fg_inflation_df["Timeline"] == "Year 4 FG Price Inflation (%)", p].values) / 100.0
@@ -227,7 +231,6 @@ for p in products:
     y1_r_weighted_avg = y1_v_total / y1_q_total if y1_q_total > 0 else 0.0
     y1_q_avg_monthly = y1_q_total / 12.0
     
-    # Apply long-term price inflation index tracking
     base_r_y2 = safe_float(edited_rate_df.loc[edited_rate_df["Timeline"] == "Year 2", p].values)
     base_r_y3 = safe_float(edited_rate_df.loc[edited_rate_df["Timeline"] == "Year 3", p].values)
     base_r_y4 = safe_float(edited_rate_df.loc[edited_rate_df["Timeline"] == "Year 4", p].values)
@@ -254,11 +257,13 @@ for p in products:
     p_op, p_cl, p_prod = [0.0] * 17, [0.0] * 17, [0.0] * 17
     
     for idx in range(12): p_cl[idx] = (hold_days / 30.0) * p_sales[idx]
-    p_op = m1_op_input
+    
+    # FIXED Assignment logic: maps starting balance index cleanly
+    p_op[0] = m1_op_input
     for idx in range(1, 12): p_op[idx] = p_cl[idx - 1]
     for idx in range(12): p_prod[idx] = p_sales[idx] + p_cl[idx] - p_op[idx]
     
-    p_op, p_cl, p_prod = p_op, p_cl, sum(p_prod[0:12])
+    p_op[12], p_cl[12], p_prod[12] = p_op[0], p_cl[11], sum(p_prod[0:12])
     
     horizon_map = {"Year 2": 13, "Year 3": 14, "Year 4": 15, "Year 5": 16}
     prev_map = {"Year 2": 12, "Year 3": 13, "Year 4": 14, "Year 5": 15}
@@ -298,10 +303,10 @@ for idx in valid_time_indices:
         fg_scrap_matrix[p][idx] += v_scrap_val
 
 for rm in raw_materials:
-    rm_gross_cons_matrix[rm] = sum(rm_gross_cons_matrix[rm][0:12])
-    rm_total_loss_matrix[rm] = sum(rm_total_loss_matrix[rm][0:12])
+    rm_gross_cons_matrix[rm][12] = sum(rm_gross_cons_matrix[rm][0:12])
+    rm_total_loss_matrix[rm][12] = sum(rm_total_loss_matrix[rm][0:12])
 for p in products:
-    fg_scrap_matrix[p] = sum(fg_scrap_matrix[p][0:12])
+    fg_scrap_matrix[p][12] = sum(fg_scrap_matrix[p][0:12])
 
 rm_op_matrix = {rm: [0.0]*17 for rm in raw_materials}
 rm_cl_matrix = {rm: [0.0]*17 for rm in raw_materials}
@@ -313,15 +318,15 @@ for rm in raw_materials:
     
     for idx in range(12):
         rm_cl_matrix[rm][idx] = (rm_gross_cons_matrix[rm][idx] / 30.0) * days_hold_rm
-    rm_op_matrix[rm] = m1_op_rm
+    rm_op_matrix[rm][0] = m1_op_rm
     for idx in range(1, 12):
         rm_op_matrix[rm][idx] = rm_cl_matrix[rm][idx - 1]
     for idx in range(12):
         rm_purch_matrix[rm][idx] = max(0.0, rm_gross_cons_matrix[rm][idx] + rm_cl_matrix[rm][idx] - rm_op_matrix[rm][idx])
         
-    rm_op_matrix[rm] = rm_op_matrix[rm]
-    rm_cl_matrix[rm] = rm_cl_matrix[rm]
-    rm_purch_matrix[rm] = sum(rm_purch_matrix[rm][0:12])
+    rm_op_matrix[rm][12] = rm_op_matrix[rm][0]
+    rm_cl_matrix[rm][12] = rm_cl_matrix[rm][11]
+    rm_purch_matrix[rm][12] = sum(rm_purch_matrix[rm][0:12])
     
     horizon_map = {"Year 2": 13, "Year 3": 14, "Year 4": 15, "Year 5": 16}
     prev_map = {"Year 2": 12, "Year 3": 13, "Year 4": 14, "Year 5": 15}
@@ -341,11 +346,11 @@ for rm in raw_materials:
     initial_base_rate = safe_float(edited_rm_price_df.loc[edited_rm_price_df["Raw Material"] == rm, "Initial Price"].values)
     for idx in range(12):
         rm_price_horizon[rm][idx] = initial_base_rate
-    rm_price_horizon[rm] = initial_base_rate
-    rm_price_horizon[rm] = initial_base_rate * (1 + inf_y2)
-    rm_price_horizon[rm] = rm_price_horizon[rm] * (1 + inf_y3)
-    rm_price_horizon[rm] = rm_price_horizon[rm] * (1 + inf_y4)
-    rm_price_horizon[rm] = rm_price_horizon[rm] * (1 + inf_y5)
+    rm_price_horizon[rm][12] = initial_base_rate
+    rm_price_horizon[rm][13] = initial_base_rate * (1 + inf_y2)
+    rm_price_horizon[rm][14] = rm_price_horizon[rm][13] * (1 + inf_y3)
+    rm_price_horizon[rm][15] = rm_price_horizon[rm][14] * (1 + inf_y4)
+    rm_price_horizon[rm][16] = rm_price_horizon[rm][15] * (1 + inf_y5)
 
 # Value Matrices Procurement Calculation Engine (Converted to Lacs scale units)
 rm_purch_val_matrix = {rm: [0.0]*17 for rm in raw_materials}
@@ -412,11 +417,11 @@ df_scrap_final = pd.concat([df_scrap_final, pd.DataFrame([t_scrap_row])], ignore
 # 4.3 Raw Material Valuation Financial Matrix Assembly (RM Val tab frames)
 df_rm_purchase_val_final = compile_report(rm_purch_val_matrix, "Raw Material")
 df_rm_consumption_val_final = compile_report(rm_cons_val_matrix, "Raw Material")
-df_rm_loss_val_final = compile_report(rm_total_loss_matrix, "Raw Material")
+df_rm_loss_val_final = compile_report(rm_loss_val_matrix, "Raw Material")
 df_rm_op_val_final = compile_report(rm_op_val_matrix, "Raw Material")
 df_rm_cl_val_final = compile_report(rm_cl_val_matrix, "Raw Material")
 
-# NEW: Continuous stacked valuation inventory ledger matching structural templates
+# Continuous stacked valuation inventory ledger matching structural templates
 all_rm_val_flow_rows = []
 for rm in raw_materials:
     rm_v_block = pd.DataFrame({
@@ -531,7 +536,11 @@ with page_tab4:
     st.subheader("3. RM Consumption (Rs in Lacs)")
     st.dataframe(df_rm_consumption_val_final.style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
     st.subheader("4. RM Loss (Rs in Lacs)")
-    st.dataframe(df_rm_loss_final.style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
+    st.dataframe(df_rm_loss_val_final.style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
+    st.subheader("5. RM Opening Stock (Rs in Lacs)")
+    st.dataframe(df_rm_op_val_final.style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
+    st.subheader("6. RM Closing Stock (Rs in Lacs)")
+    st.dataframe(df_rm_cl_val_final.style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
 with page_tab5:
     st.title("PL Forecast")
     
