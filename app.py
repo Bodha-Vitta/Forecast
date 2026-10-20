@@ -13,7 +13,7 @@ months = [f"M{i}" for i in range(1, 13)]
 future_years = ["Year 2", "Year 3", "Year 4", "Year 5"]
 display_columns = months + ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5"]
 
-# 1. Initialize Baseline Quantities Matrix with specified structural defaults
+# 1. Initialize Baseline Quantities Matrix
 if "sidebar_qty_df" not in st.session_state:
     st.session_state.sidebar_qty_df = pd.DataFrame({
         "Timeline": months,
@@ -22,7 +22,7 @@ if "sidebar_qty_df" not in st.session_state:
         "P3": [1000.0] * 12
     })
 
-# 2. Initialize Price Rate parameters matrix with specified structural defaults
+# 2. Initialize Price Rate parameters matrix
 if "sidebar_rate_df" not in st.session_state:
     st.session_state.sidebar_rate_df = pd.DataFrame({
         "Timeline": months + future_years,
@@ -31,7 +31,7 @@ if "sidebar_rate_df" not in st.session_state:
         "P3": [1000.0] * 16
     })
 
-# 3. Initialize Warehouse Parameters metrics matrix with specified structural defaults
+# 3. Initialize Warehouse Parameters metrics matrix
 if "sidebar_prod_params_df" not in st.session_state:
     st.session_state.sidebar_prod_params_df = pd.DataFrame({
         "Parameters": ["M1 Initial Op Stock Qty", "Target Hold Days (Closing Stock)"],
@@ -46,7 +46,6 @@ if "sidebar_prod_params_df" not in st.session_state:
 with st.sidebar:
     st.header("⚙️ Workspace Configuration Cockpit")
     
-    # Compounding growth factors inputs configuration parameters
     st.subheader("📈 Annual Volume Growth (%)")
     g_y2 = st.number_input("Year 2 Volume Growth (%)", value=5.0) / 100.0
     g_y3 = st.number_input("Year 3 Volume Growth (%)", value=5.0) / 100.0
@@ -136,7 +135,7 @@ def compile_report(matrix_dict, is_rev=False):
     return pd.concat([df, pd.DataFrame([t_row])], ignore_index=True)
 
 df_rev_final = compile_report(rev_matrix)
-df_rev_final.iloc[0:, 1:] = df_rev_final.iloc[0:, 1:] / 100000.0 # Lacs formatting conversion update
+df_rev_final.iloc[0:, 1:] = df_rev_final.iloc[0:, 1:] / 100000.0
 df_qty_final = compile_report(qty_matrix)
 df_rate_final = pd.DataFrame(rate_matrix, index=display_columns).T.reset_index().rename(columns={"index": "Product"})
 
@@ -156,53 +155,55 @@ df_summary_cl = compile_report(fg_cl_matrix)
 # -----------------------------------------------------------------------------
 # CHAPTER 5: TOP PANEL NAVIGATION ROUTER & WORKSPACE VIEWPORTS
 # -----------------------------------------------------------------------------
-page_tab1, page_tab2 = st.tabs(["📊 Sales & Demand Forecast", "🏭 Finished Goods Flow Forecast"])
+page_tab1, page_tab2 = st.tabs(["Revenue", "FG"])
 
 with page_tab1:
-    st.title("📊 Corporate Sales & Revenue Forecasting Desktop")
-    st.write("Review real-time cascaded demand estimations across revenue volumes, physical scales, and baseline pricing benchmarks:")
+    st.title("Sales Forecasting")
     
-    sub_tab1, sub_tab2, sub_tab3 = st.tabs(["Revenue Volumes (Lacs)", "Sales Volumes (Units)", "Price Index Target"])
-    with sub_tab1:
-        st.subheader("💰 Calculated Revenue Horizon Matrix")
-        st.dataframe(df_rev_final.style.format({col: "{:,.2f} L" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
-    with sub_tab2:
-        st.subheader("📦 Calculated Demand Physical Unit Log")
-        st.dataframe(df_qty_final.style.format({col: "{:,.0f}" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
-    with sub_tab3:
-        st.subheader("💵 Active Evaluated Price Master Index")
-        st.dataframe(df_rate_final.style.format({col: "Rs {:,.2f}" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
+    st.subheader("1. Revenue (Rs in Lacs)")
+    st.dataframe(df_rev_final.style.format({col: "{:,.2f} L" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
+    
+    st.subheader("2. Sale (Qt)")
+    st.dataframe(df_qty_final.style.format({col: "{:,.0f}" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
 
 with page_tab2:
-    st.title("🏭 Finished Goods Supply Chain & Production Planner")
-    st.write("Review computed structural warehouse material balance vectors and total volume aggregations down the ledger windows:")
+    st.title("Production Forecasting")
     
-    st.subheader("📋 1. Product-Wise Finished Goods Flow Ledger (Continuous Pipeline)")
+    st.subheader("1. FG Flow (Qt)")
     st.dataframe(master_prod_flow_df.style.format({col: "{:,.0f}" for col in display_columns if col not in ["Product", "FG Inventory Metrics"]}), use_container_width=True, hide_index=True)
     
-    st.markdown("---")
-    st.subheader("🏭 2. Forecast: Production Qty Overview")
+    st.subheader("2. Production (Qt)")
     st.dataframe(df_summary_prod.style.format({col: "{:,.0f}" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
     
-    st.subheader("📦 3. Forecast: Opening Stock Summary Matrix")
-    st.dataframe(df_summary_op.style.format({col: "{:,.0f}" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
+    st.subheader("3. FG Closing Stock (Qt)")
+    st.dataframe(df_summary_cl.style.format({col: "{:,.0f}" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
     
-    st.subheader("📉 4. Forecast: Closing Stock Target Pillars")
+    st.subheader("4. FG Opening Stock (Qt)")
+    st.dataframe(df_summary_op.style.format({col: "{:,.0f}" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
+
 # -----------------------------------------------------------------------------
 # CHAPTER 6: GLOBAL EXCEL PIPELINE DOWNSTREAM COMPILER
 # -----------------------------------------------------------------------------
 st.markdown("---")
 output_buffer = BytesIO()
-with pd.ExcelWriter(output_buffer, engine="openpyxl") as writer:
-    df_rev_final.to_excel(writer, sheet_name="Revenue (Lacs)", index=False)
-    df_qty_final.to_excel(writer, sheet_name="Quantity Volumes", index=False)
-    df_rate_final.to_excel(writer, sheet_name="Unit Pricing Index", index=False)
-    master_prod_flow_df.to_excel(writer, sheet_name="FG Flow Ledger", index=False)
-    df_summary_prod.to_excel(writer, sheet_name="Summary Production", index=False)
 
+try:
+    with pd.ExcelWriter(output_buffer, engine="openpyxl") as writer:
+        df_rev_final.to_excel(writer, sheet_name="Revenue (Lacs)", index=False)
+        df_qty_final.to_excel(writer, sheet_name="Quantity Volumes", index=False)
+        master_prod_flow_df.to_excel(writer, sheet_name="FG Flow Ledger", index=False)
+        df_summary_prod.to_excel(writer, sheet_name="Summary Production", index=False)
+    excel_data = output_buffer.getvalue()
+except ModuleNotFoundError:
+    with pd.ExcelWriter(output_buffer, engine="xlsxwriter") as writer:
+        df_rev_final.to_excel(writer, sheet_name="Revenue (Lacs)", index=False)
+        df_qty_final.to_excel(writer, sheet_name="Quantity Volumes", index=False)
+master_prod_flow_df.to_excel(writer, sheet_name="FG Flow Ledger", index=False)
+df_summary_prod.to_excel(writer, sheet_name="Summary Production", index=False)
+excel_data = output_buffer.getvalue()
 st.download_button(
-    label="📥 Download Updated Comprehensive Interconnected Workbook",
-    data=output_buffer.getvalue(),
-    file_name="Sales_And_Production_Forecasting_Report.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+label="📥 Download Updated Comprehensive Interconnected Workbook",
+data=excel_data,
+file_name="Sales_And_Production_Forecasting_Report.xlsx",
+mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
