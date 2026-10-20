@@ -124,13 +124,9 @@ with st.sidebar:
     if sidebar_context == "Sales / FG Feed":
         st.header("📊 1. Sales & FG Feed Desk")
         g2_pct = st.number_input("Year 2 Volume Growth (%)", value=st.session_state.growth_saved[0])
-        g_y2 = g2_pct / 100.0
         g3_pct = st.number_input("Year 3 Volume Growth (%)", value=st.session_state.growth_saved[1])
-        g_y3 = g3_pct / 100.0
         g4_pct = st.number_input("Year 4 Volume Growth (%)", value=st.session_state.growth_saved[2])
-        g_y4 = g4_pct / 100.0
         g5_pct = st.number_input("Year 5 Volume Growth (%)", value=st.session_state.growth_saved[3])
-        g_y5 = g5_pct / 100.0
         edited_qty_df = st.data_editor(st.session_state.sidebar_qty_df, hide_index=True, column_config={"Timeline": st.column_config.TextColumn(disabled=True)})
         st.session_state.growth_saved = [g2_pct, g3_pct, g4_pct, g5_pct]
         st.session_state.sidebar_qty_df = edited_qty_df
@@ -148,7 +144,6 @@ with st.sidebar:
         edited_rm_logistics_df = st.data_editor(st.session_state.sidebar_rm_logistics_df, hide_index=True, column_config={"Raw Material": st.column_config.TextColumn(disabled=True)})
         st.session_state.sidebar_rm_logistics_df = edited_rm_logistics_df
         edited_qty_df, edited_rate_df, edited_fg_inflation_df, edited_prod_params_df, edited_rm_price_df, edited_rm_inflation_df = st.session_state.sidebar_qty_df, st.session_state.sidebar_rate_df, st.session_state.sidebar_fg_inflation_df, st.session_state.sidebar_prod_params_df, st.session_state.sidebar_rm_price_df, st.session_state.sidebar_rm_inflation_df
-        g_y2, g_y3, g_y4, g_y5 = [x / 100.0 for x in st.session_state.growth_saved]
     else:
         st.header("💰 3. RM Val Feed Desk")
         edited_rm_price_df = st.data_editor(st.session_state.sidebar_rm_price_df, hide_index=True, column_config={"Raw Material": st.column_config.TextColumn(disabled=True)})
@@ -156,7 +151,6 @@ with st.sidebar:
         edited_rm_inflation_df = st.data_editor(st.session_state.sidebar_rm_inflation_df, hide_index=True, column_config={"Timeline": st.column_config.TextColumn(disabled=True)})
         st.session_state.sidebar_rm_inflation_df = edited_rm_inflation_df
         edited_qty_df, edited_rate_df, edited_fg_inflation_df, edited_prod_params_df, edited_bom_df, edited_rm_logistics_df = st.session_state.sidebar_qty_df, st.session_state.sidebar_rate_df, st.session_state.sidebar_fg_inflation_df, st.session_state.sidebar_prod_params_df, st.session_state.sidebar_bom_df, st.session_state.sidebar_rm_logistics_df
-        g_y2, g_y3, g_y4, g_y5 = [x / 100.0 for x in st.session_state.growth_saved]
 # -----------------------------------------------------------------------------
 # CHAPTER 3: ANALYTICAL COMPUTATION LAYER
 # -----------------------------------------------------------------------------
@@ -170,6 +164,11 @@ def safe_float(val):
             return float(val[0]) if len(val) > 0 else 0.0
         return float(val)
     except: return 0.0
+
+g_y2 = safe_float(st.session_state.growth_saved[0]) / 100.0
+g_y3 = safe_float(st.session_state.growth_saved[1]) / 100.0
+g_y4 = safe_float(st.session_state.growth_saved[2]) / 100.0
+g_y5 = safe_float(st.session_state.growth_saved[3]) / 100.0
 
 for p in products:
     q_months = [safe_float(edited_qty_df.loc[edited_qty_df["Timeline"] == m, p].values) for m in months]
@@ -222,7 +221,6 @@ for p in products:
         p_cl[idx] = (hold_days / 30.0) * (p_sales[idx] / 12.0)
         p_prod[idx] = p_sales[idx] + p_cl[idx] - p_op_arr[idx]
     prod_sales_matrix[p], fg_cl_matrix[p], fg_op_matrix[p], fg_prod_matrix[p] = p_sales, p_cl, p_op_arr, p_prod
-
 rm_gross_cons_matrix, rm_total_loss_matrix, fg_scrap_matrix = {rm: [0.0]*17 for rm in raw_materials}, {rm: [0.0]*17 for rm in raw_materials}, {p: [0.0]*17 for p in products}
 valid_time_indices = [i for i in range(17) if i != 12]
 
@@ -258,6 +256,12 @@ for rm in raw_materials:
         rm_op_matrix[rm][idx] = rm_cl_matrix[rm][prev_map[yr]]
         rm_cl_matrix[rm][idx] = ((rm_gross_cons_matrix[rm][idx] / 12.0) / 30.0) * days_hold_rm
         rm_purch_matrix[rm][idx] = max(0.0, rm_gross_cons_matrix[rm][idx] + rm_cl_matrix[rm][idx] - rm_op_matrix[rm][idx])
+
+# PREVENTING NAMERROR: Load price parameter inflation vectors first
+inf_y2 = safe_float(edited_rm_inflation_df.loc[edited_rm_inflation_df["Timeline"] == "Year 2 Price Inflation (%)", "Inflation Rates (%)"].values) / 100.0
+inf_y3 = safe_float(edited_rm_inflation_df.loc[edited_rm_inflation_df["Timeline"] == "Year 3 Price Inflation (%)", "Inflation Rates (%)"].values) / 100.0
+inf_y4 = safe_float(edited_rm_inflation_df.loc[edited_rm_inflation_df["Timeline"] == "Year 4 Price Inflation (%)", "Inflation Rates (%)"].values) / 100.0
+inf_y5 = safe_float(edited_rm_inflation_df.loc[edited_rm_inflation_df["Timeline"] == "Year 5 Price Inflation (%)", "Inflation Rates (%)"].values) / 100.0
 
 rm_price_horizon = {rm: [0.0]*17 for rm in raw_materials}
 for rm in raw_materials:
@@ -331,6 +335,7 @@ for rm in raw_materials:
     for idx, col in enumerate(display_columns): rm_v_block[col] = [rm_op_val_matrix[rm][idx], rm_purch_val_matrix[rm][idx], rm_cons_val_matrix[rm][idx], rm_cl_val_matrix[rm][idx]]
     all_rm_val_flow_rows.append(rm_v_block)
 master_rm_val_flow_df = pd.concat(all_rm_val_flow_rows, ignore_index=True)
+
 # -----------------------------------------------------------------------------
 # ADVANCED P&L GRID ARCHITECTURE (Unified Structural Parent-Child Blueprint)
 # -----------------------------------------------------------------------------
