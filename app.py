@@ -8,12 +8,25 @@ from io import BytesIO
 # -----------------------------------------------------------------------------
 st.set_page_config(page_title="Corporate Forecast Cockpit", layout="wide")
 
+# Inject Custom CSS to freeze the navigation tabs at the top of the viewport
+st.markdown("""
+    <style>
+    div[data-testid="stHorizontalBlock"] {
+        position: sticky;
+        top: 0;
+        background-color: white;
+        z-index: 999;
+        padding-top: 10px;
+        border-bottom: 1px solid #f0f2f6;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 products = ["P1", "P2", "P3"]
 raw_materials = [f"RM{i}" for i in range(1, 13)]
 months = [f"M{i}" for i in range(1, 13)]
 future_years = ["Year 2", "Year 3", "Year 4", "Year 5"]
 display_columns = months + ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5"]
-
 # 1. Initialize Baseline Quantities Matrix
 if "sidebar_qty_df" not in st.session_state:
     st.session_state.sidebar_qty_df = pd.DataFrame({
@@ -23,16 +36,16 @@ if "sidebar_qty_df" not in st.session_state:
         "P3": [1000.0] * 12
     })
 
-# 2. Initialize Price Rate parameters matrix
+# 2. Initialize Price Rate Parameters Matrix with requested new defaults
 if "sidebar_rate_df" not in st.session_state:
     st.session_state.sidebar_rate_df = pd.DataFrame({
         "Timeline": months + future_years,
-        "P1": [200.0] * 16,
-        "P2": [500.0] * 16,
-        "P3": [1000.0] * 16
+        "P1": [170.0] * 16,
+        "P2": [200.0] * 16,
+        "P3": [450.0] * 16
     })
 
-# 3. Initialize Finished Goods Warehouse Parameters metrics matrix
+# 3. Initialize Finished Goods Warehouse Parameters Matrix
 if "sidebar_prod_params_df" not in st.session_state:
     st.session_state.sidebar_prod_params_df = pd.DataFrame({
         "Parameters": ["M1 Initial Op Stock Qty", "Target Hold Days (Closing Stock)"],
@@ -41,7 +54,7 @@ if "sidebar_prod_params_df" not in st.session_state:
         "P3": [2500.0, 60.0]
     })
 
-# 4. Initialize Dynamic BOM Matrix Setup with requested default profile structural specs
+# 4. Initialize Dynamic BOM Matrix Setup
 if "sidebar_bom_df" not in st.session_state:
     bom_data = {
         "RM Name": ["RM1", "RM2", "RM3", "RM4", "RM5", "RM6", "RM1", "RM7", "RM8", "RM9", "RM10", "RM1", "RM11", "RM12"],
@@ -52,50 +65,106 @@ if "sidebar_bom_df" not in st.session_state:
     }
     st.session_state.sidebar_bom_df = pd.DataFrame(bom_data)
 
-# 5. Initialize Raw Material Warehouse Balance Logistics Control parameters
+# 5. Initialize Raw Material Logistics Inventory parameters
 if "sidebar_rm_logistics_df" not in st.session_state:
     logistics_data = {
         "Raw Material": raw_materials,
-        "M1 Initial Op Stock Qty": [13000.0, 1000.0, 1700.0, 100.0, 50.0, 300.0, 300.0, 250.0, 350.0, 250.0, 100.0, 50.0],
+        "M1 Initial Op Stock Qty": [13000.0, 1658.0, 553.0, 442.0, 332.0, 332.0, 1700.0, 250.0, 350.0, 250.0, 100.0, 50.0],
         "Days Hold": [45.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0]
     }
     st.session_state.sidebar_rm_logistics_df = pd.DataFrame(logistics_data)
+
+# 6. Initialize Raw Material Base Unit Commercial Procurement Price Feeder
+if "sidebar_rm_price_df" not in st.session_state:
+    st.session_state.sidebar_rm_price_df = pd.DataFrame({
+        "Raw Material": raw_materials,
+        "Initial Price": [100.0, 400.0, 20.0, 250.0, 200.0, 250.0, 200.0, 250.0, 20.0, 100.0, 600.0, 400.0]
+    })
+
+# 7. Initialize Long-Term Compound Price Inflation Assumptions Grid Matrix
+if "sidebar_rm_inflation_df" not in st.session_state:
+    st.session_state.sidebar_rm_inflation_df = pd.DataFrame({
+        "Timeline": ["Year 2 Price Inflation (%)", "Year 3 Price Inflation (%)", "Year 4 Price Inflation (%)", "Year 5 Price Inflation (%)"],
+        "Inflation Rates (%)": [5.0, 5.0, 5.0, 5.0]
+    })
 # -----------------------------------------------------------------------------
 # CHAPTER 2: SIDEBAR CONTROL PANEL DESK
 # -----------------------------------------------------------------------------
 with st.sidebar:
     st.header("⚙️ Workspace Configuration Cockpit")
     
-    st.subheader("📈 Annual Volume Growth (%)")
-    g_y2 = st.number_input("Year 2 Volume Growth (%)", value=5.0) / 100.0
-    g_y3 = st.number_input("Year 3 Volume Growth (%)", value=5.0) / 100.0
-    g_y4 = st.number_input("Year 4 Volume Growth (%)", value=5.0) / 100.0
-    g_y5 = st.number_input("Year 5 Volume Growth (%)", value=5.0) / 100.0
-
+    # Global Nav context configuration router switch
+    sidebar_context = st.radio(
+        "🎯 Focus Workspace Target Viewport Context:",
+        options=["Sales / FG Feed", "RM Qt Feed", "RM Val Feed"],
+        help="Switches input priorities to match the page you are working on."
+    )
     st.markdown("---")
-    st.subheader("📝 1. Quantity Base Parameters")
-    edited_qty_df = st.data_editor(st.session_state.sidebar_qty_df, hide_index=True, column_config={"Timeline": st.column_config.TextColumn(disabled=True)})
-    st.session_state.sidebar_qty_df = edited_qty_df
 
-    st.markdown("---")
-    st.subheader("💵 2. Price/Rate Parameters")
-    edited_rate_df = st.data_editor(st.session_state.sidebar_rate_df, hide_index=True, column_config={"Timeline": st.column_config.TextColumn(disabled=True)})
-    st.session_state.sidebar_rate_df = edited_rate_df
+    # CONTEXT LAYER A: SALES & FINISHED GOODS ASSUMPTIONS BLOCK
+    if sidebar_context == "Sales / FG Feed":
+        st.header("📊 1. Sales & FG Feed Desk")
+        st.subheader("📈 Annual Volume Growth (%)")
+        g_y2 = st.number_input("Year 2 Volume Growth (%)", value=5.0) / 100.0
+        g_y3 = st.number_input("Year 3 Volume Growth (%)", value=5.0) / 100.0
+        g_y4 = st.number_input("Year 4 Volume Growth (%)", value=5.0) / 100.0
+        g_y5 = st.number_input("Year 5 Volume Growth (%)", value=5.0) / 100.0
 
-    st.markdown("---")
-    st.subheader("🏭 3. FG & Warehouse Metrics")
-    edited_prod_params_df = st.data_editor(st.session_state.sidebar_prod_params_df, hide_index=True, column_config={"Parameters": st.column_config.TextColumn(disabled=True)})
-    st.session_state.sidebar_prod_params_df = edited_prod_params_df
+        st.subheader("📝 Quantity Base Parameters")
+        edited_qty_df = st.data_editor(st.session_state.sidebar_qty_df, hide_index=True, column_config={"Timeline": st.column_config.TextColumn(disabled=True)})
+        st.session_state.sidebar_qty_df = edited_qty_df
 
-    st.markdown("---")
-    st.subheader("🛠️ 4. RM Recipe Allocations & Losses (BOM)")
-    edited_bom_df = st.data_editor(st.session_state.sidebar_bom_df, hide_index=True, column_config={"RM Name": st.column_config.TextColumn(disabled=True), "Target FG": st.column_config.TextColumn(disabled=True)})
-    st.session_state.sidebar_bom_df = edited_bom_df
+        st.subheader("💵 Price/Rate Parameters")
+        edited_rate_df = st.data_editor(st.session_state.sidebar_rate_df, hide_index=True, column_config={"Timeline": st.column_config.TextColumn(disabled=True)})
+        st.session_state.sidebar_rate_df = edited_rate_df
 
-    st.markdown("---")
-    st.subheader("🧱 5. RM Inventory Controls (Op Stock / Hold Days)")
-    edited_rm_logistics_df = st.data_editor(st.session_state.sidebar_rm_logistics_df, hide_index=True, column_config={"Raw Material": st.column_config.TextColumn(disabled=True)})
-    st.session_state.sidebar_rm_logistics_df = edited_rm_logistics_df
+        st.subheader("🏭 FG & Warehouse Metrics")
+        edited_prod_params_df = st.data_editor(st.session_state.sidebar_prod_params_df, hide_index=True, column_config={"Parameters": st.column_config.TextColumn(disabled=True)})
+        st.session_state.sidebar_prod_params_df = edited_prod_params_df
+        
+        # Preserve unchanged states in cache
+        edited_bom_df = st.session_state.sidebar_bom_df
+        edited_rm_logistics_df = st.session_state.sidebar_rm_logistics_df
+        edited_rm_price_df = st.session_state.sidebar_rm_price_df
+        edited_rm_inflation_df = st.session_state.sidebar_rm_inflation_df
+
+    # CONTEXT LAYER B: RAW MATERIAL QUANTITIES & BOM RATIO METRICS
+    elif sidebar_context == "RM Qt Feed":
+        st.header("🧱 2. RM Qt Feed Desk")
+        st.subheader("🛠️ RM Recipe Allocations & Losses (BOM)")
+        edited_bom_df = st.data_editor(st.session_state.sidebar_bom_df, hide_index=True, column_config={"RM Name": st.column_config.TextColumn(disabled=True), "Target FG": st.column_config.TextColumn(disabled=True)})
+        st.session_state.sidebar_bom_df = edited_bom_df
+
+        st.subheader("🧱 RM Inventory Controls (Op Stock / Hold Days)")
+        edited_rm_logistics_df = st.data_editor(st.session_state.sidebar_rm_logistics_df, hide_index=True, column_config={"Raw Material": st.column_config.TextColumn(disabled=True)})
+        st.session_state.sidebar_rm_logistics_df = edited_rm_logistics_df
+        
+        # Pull unchanged records from data states
+        edited_qty_df = st.session_state.sidebar_qty_df
+        edited_rate_df = st.session_state.sidebar_rate_df
+        edited_prod_params_df = st.session_state.sidebar_prod_params_df
+        edited_rm_price_df = st.session_state.sidebar_rm_price_df
+        edited_rm_inflation_df = st.session_state.sidebar_rm_inflation_df
+        g_y2, g_y3, g_y4, g_y5 = 0.05, 0.05, 0.05, 0.05
+
+    # CONTEXT LAYER C: RAW MATERIAL PROCUREMENTS RATES & MACRO INFLATION INDEXES
+    else:
+        st.header("💰 3. RM Val Feed Desk")
+        st.subheader("💵 Initial RM Purchase Rates (Per Unit)")
+        edited_rm_price_df = st.data_editor(st.session_state.sidebar_rm_price_df, hide_index=True, column_config={"Raw Material": st.column_config.TextColumn(disabled=True)})
+        st.session_state.sidebar_rm_price_df = edited_rm_price_df
+
+        st.subheader("📈 RM Price Inflation Horizon Matrix")
+        edited_rm_inflation_df = st.data_editor(st.session_state.sidebar_rm_inflation_df, hide_index=True, column_config={"Timeline": st.column_config.TextColumn(disabled=True)})
+        st.session_state.sidebar_rm_inflation_df = edited_rm_inflation_df
+        
+        # Pull unchanged records from data states
+        edited_qty_df = st.session_state.sidebar_qty_df
+        edited_rate_df = st.session_state.sidebar_rate_df
+        edited_prod_params_df = st.session_state.sidebar_prod_params_df
+        edited_bom_df = st.session_state.sidebar_bom_df
+        edited_rm_logistics_df = st.session_state.sidebar_rm_logistics_df
+        g_y2, g_y3, g_y4, g_y5 = 0.05, 0.05, 0.05, 0.05
 # -----------------------------------------------------------------------------
 # CHAPTER 3: ANALYTICAL COMPUTATION LAYER
 # -----------------------------------------------------------------------------
@@ -104,19 +173,22 @@ prod_sales_matrix, fg_cl_matrix, fg_op_matrix, fg_prod_matrix = {}, {}, {}, {}
 
 def safe_float(val):
     if pd.isna(val) or val == "" or val is None: return 0.0
-    try: return float(val)
+    try:
+        if isinstance(val, (list, np.ndarray)) and len(val) > 0:
+            return float(val[0])
+        return float(val)
     except: return 0.0
 
 # 3.1 Finished Goods Analytical Computation Layer
 for p in products:
-    q_months = [safe_float(edited_qty_df.loc[edited_qty_df["Timeline"] == m, p].values[0]) for m in months]
-    r_months = [safe_float(edited_rate_df.loc[edited_rate_df["Timeline"] == m, p].values[0]) for m in months]
+    q_months = [safe_float(edited_qty_df.loc[edited_qty_df["Timeline"] == m, p].values) for m in months]
+    r_months = [safe_float(edited_rate_df.loc[edited_rate_df["Timeline"] == m, p].values) for m in months]
     v_months = [q * r for q, r in zip(q_months, r_months)]
     
-    r_y2 = safe_float(edited_rate_df.loc[edited_rate_df["Timeline"] == "Year 2", p].values[0])
-    r_y3 = safe_float(edited_rate_df.loc[edited_rate_df["Timeline"] == "Year 3", p].values[0])
-    r_y4 = safe_float(edited_rate_df.loc[edited_rate_df["Timeline"] == "Year 4", p].values[0])
-    r_y5 = safe_float(edited_rate_df.loc[edited_rate_df["Timeline"] == "Year 5", p].values[0])
+    r_y2 = safe_float(edited_rate_df.loc[edited_rate_df["Timeline"] == "Year 2", p].values)
+    r_y3 = safe_float(edited_rate_df.loc[edited_rate_df["Timeline"] == "Year 3", p].values)
+    r_y4 = safe_float(edited_rate_df.loc[edited_rate_df["Timeline"] == "Year 4", p].values)
+    r_y5 = safe_float(edited_rate_df.loc[edited_rate_df["Timeline"] == "Year 5", p].values)
     
     y1_q_total = sum(q_months)
     y1_v_total = sum(v_months)
@@ -132,8 +204,8 @@ for p in products:
     rate_matrix[p] = r_months + [y1_r_weighted_avg, r_y2, r_y3, r_y4, r_y5]
     rev_matrix[p] = v_months + [y1_v_total, (y2_q * r_y2), (y3_q * r_y3), (y4_q * r_y4), (y5_q * r_y5)]
 
-    m1_op_input = safe_float(edited_prod_params_df.loc[edited_prod_params_df["Parameters"] == "M1 Initial Op Stock Qty", p].values[0])
-    hold_days = safe_float(edited_prod_params_df.loc[edited_prod_params_df["Parameters"] == "Target Hold Days (Closing Stock)", p].values[0])
+    m1_op_input = safe_float(edited_prod_params_df.loc[edited_prod_params_df["Parameters"] == "M1 Initial Op Stock Qty", p].values)
+    hold_days = safe_float(edited_prod_params_df.loc[edited_prod_params_df["Parameters"] == "Target Hold Days (Closing Stock)", p].values)
     
     p_sales = qty_matrix[p]
     p_op, p_cl, p_prod = [0.0] * 17, [0.0] * 17, [0.0] * 17
@@ -153,13 +225,11 @@ for p in products:
         p_prod[idx] = p_sales[idx] + p_cl[idx] - p_op[idx]
 
     prod_sales_matrix[p], fg_cl_matrix[p], fg_op_matrix[p], fg_prod_matrix[p] = p_sales, p_cl, p_op, p_prod
-
-# 3.2 Raw Material Advanced Analytical Computational Engine
+# 3.2 Raw Material Advanced Analytical Computational Engine (Quantity Model)
 rm_gross_cons_matrix = {rm: [0.0]*17 for rm in raw_materials}
 rm_total_loss_matrix = {rm: [0.0]*17 for rm in raw_materials}
 fg_scrap_matrix = {p: [0.0]*17 for p in products}
 
-# Process monthly matrices (0 to 11) and outer macro brackets (13 to 16)
 valid_time_indices = [i for i in range(17) if i != 12]
 
 for idx in valid_time_indices:
@@ -184,21 +254,19 @@ for idx in valid_time_indices:
         rm_total_loss_matrix[rm][idx] += total_loss_val
         fg_scrap_matrix[p][idx] += v_scrap_val
 
-# Process Year 1 Consolidation sums (Index 12)
 for rm in raw_materials:
     rm_gross_cons_matrix[rm][12] = sum(rm_gross_cons_matrix[rm][0:12])
     rm_total_loss_matrix[rm][12] = sum(rm_total_loss_matrix[rm][0:12])
 for p in products:
     fg_scrap_matrix[p][12] = sum(fg_scrap_matrix[p][0:12])
 
-# Complete Raw Material Movement Inventory Flow Calculations
 rm_op_matrix = {rm: [0.0]*17 for rm in raw_materials}
 rm_cl_matrix = {rm: [0.0]*17 for rm in raw_materials}
 rm_purch_matrix = {rm: [0.0]*17 for rm in raw_materials}
 
 for rm in raw_materials:
-    m1_op_rm = safe_float(edited_rm_logistics_df.loc[edited_rm_logistics_df["Raw Material"] == rm, "M1 Initial Op Stock Qty"].values[0])
-    days_hold_rm = safe_float(edited_rm_logistics_df.loc[edited_rm_logistics_df["Raw Material"] == rm, "Days Hold"].values[0])
+    m1_op_rm = safe_float(edited_rm_logistics_df.loc[edited_rm_logistics_df["Raw Material"] == rm, "M1 Initial Op Stock Qty"].values)
+    days_hold_rm = safe_float(edited_rm_logistics_df.loc[edited_rm_logistics_df["Raw Material"] == rm, "Days Hold"].values)
     
     for idx in range(12):
         rm_cl_matrix[rm][idx] = (rm_gross_cons_matrix[rm][idx] / 30.0) * days_hold_rm
@@ -218,6 +286,34 @@ for rm in raw_materials:
         rm_op_matrix[rm][idx] = rm_cl_matrix[rm][prev_map[yr]]
         rm_cl_matrix[rm][idx] = ((rm_gross_cons_matrix[rm][idx] / 12.0) / 30.0) * days_hold_rm
         rm_purch_matrix[rm][idx] = max(0.0, rm_gross_cons_matrix[rm][idx] + rm_cl_matrix[rm][idx] - rm_op_matrix[rm][idx])
+
+# 3.3 Raw Material Unit Pricing & Inflation Compounding Engine (Financial Value Model)
+rm_price_horizon = {rm: [0.0]*17 for rm in raw_materials}
+inf_y2 = safe_float(edited_rm_inflation_df.loc[edited_rm_inflation_df["Timeline"] == "Year 2 Price Inflation (%)", "Inflation Rates (%)"].values) / 100.0
+inf_y3 = safe_float(edited_rm_inflation_df.loc[edited_rm_inflation_df["Timeline"] == "Year 3 Price Inflation (%)", "Inflation Rates (%)"].values) / 100.0
+inf_y4 = safe_float(edited_rm_inflation_df.loc[edited_rm_inflation_df["Timeline"] == "Year 4 Price Inflation (%)", "Inflation Rates (%)"].values) / 100.0
+inf_y5 = safe_float(edited_rm_inflation_df.loc[edited_rm_inflation_df["Timeline"] == "Year 5 Price Inflation (%)", "Inflation Rates (%)"].values) / 100.0
+
+for rm in raw_materials:
+    initial_base_rate = safe_float(edited_rm_price_df.loc[edited_rm_price_df["Raw Material"] == rm, "Initial Price"].values)
+    for idx in range(12):
+        rm_price_horizon[rm][idx] = initial_base_rate
+    rm_price_horizon[rm][12] = initial_base_rate
+    rm_price_horizon[rm][13] = initial_base_rate * (1 + inf_y2)
+    rm_price_horizon[rm][14] = rm_price_horizon[rm][13] * (1 + inf_y3)
+    rm_price_horizon[rm][15] = rm_price_horizon[rm][14] * (1 + inf_y4)
+    rm_price_horizon[rm][16] = rm_price_horizon[rm][15] * (1 + inf_y5)
+
+# Value Matrices Procurement Calculation Engine (Converted to Lacs scale units)
+rm_purch_val_matrix = {rm: [0.0]*17 for rm in raw_materials}
+rm_cons_val_matrix = {rm: [0.0]*17 for rm in raw_materials}
+rm_loss_val_matrix = {rm: [0.0]*17 for rm in raw_materials}
+
+for rm in raw_materials:
+    for idx in range(17):
+        rm_purch_val_matrix[rm][idx] = (rm_purch_matrix[rm][idx] * rm_price_horizon[rm][idx]) / 100000.0
+        rm_cons_val_matrix[rm][idx] = (rm_gross_cons_matrix[rm][idx] * rm_price_horizon[rm][idx]) / 100000.0
+        rm_loss_val_matrix[rm][idx] = (rm_total_loss_matrix[rm][idx] * rm_price_horizon[rm][idx]) / 100000.0
 # -----------------------------------------------------------------------------
 # CHAPTER 4: COMPILING TABULAR STRUCTURES WITH TOTALS
 # -----------------------------------------------------------------------------
@@ -244,7 +340,7 @@ df_summary_prod = compile_report(fg_prod_matrix, "Product")
 df_summary_op = compile_report(fg_op_matrix, "Product")
 df_summary_cl = compile_report(fg_cl_matrix, "Product")
 
-# 4.2 Raw Material Output Matrix Compilations
+# 4.2 Raw Material Output Matrices Assembly (RM Qt tab frames)
 all_rm_flow_rows = []
 for rm in raw_materials:
     rm_block = pd.DataFrame({
@@ -265,10 +361,15 @@ df_scrap_final.insert(0, "Scrap (Qt)", ["Scrap P1 (SP1)", "Scrap P2 (SP2)", "Scr
 t_scrap_row = {"Scrap (Qt)": "Total"}
 for col in display_columns: t_scrap_row[col] = df_scrap_final[col].sum()
 df_scrap_final = pd.concat([df_scrap_final, pd.DataFrame([t_scrap_row])], ignore_index=True)
+
+# 4.3 Raw Material Valuation Financial Matrix Assembly (RM Val tab frames)
+df_rm_purchase_val_final = compile_report(rm_purch_val_matrix, "Raw Material")
+df_rm_consumption_val_final = compile_report(rm_cons_val_matrix, "Raw Material")
+df_rm_loss_val_final = compile_report(rm_loss_val_matrix, "Raw Material")
 # -----------------------------------------------------------------------------
 # CHAPTER 5: TOP PANEL NAVIGATION ROUTER & WORKSPACE VIEWPORTS
 # -----------------------------------------------------------------------------
-page_tab1, page_tab2, page_tab3 = st.tabs(["Revenue", "FG", "RM"])
+page_tab1, page_tab2, page_tab3, page_tab4 = st.tabs(["Revenue", "FG", "RM Qt", "RM Val"])
 
 with page_tab1:
     st.title("Sales Forecasting")
@@ -289,7 +390,7 @@ with page_tab2:
     st.dataframe(df_summary_op.style.format({col: "{:,.0f}" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
 
 with page_tab3:
-    st.title("RM Forecasting")
+    st.title("Material Forecasting")
     st.subheader("1. RM Flow (Qt)")
     st.dataframe(master_rm_flow_df.style.format({col: "{:,.0f}" for col in display_columns if col not in ["Raw Material", "RM Flow(Qt) Metrics"]}), use_container_width=True, hide_index=True)
     st.subheader("2. RM Consumption (Qt)")
@@ -300,6 +401,15 @@ with page_tab3:
     st.dataframe(df_rm_loss_final.style.format({col: "{:,.0f}" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
     st.subheader("5. Scrap (Qt)")
     st.dataframe(df_scrap_final.style.format({col: "{:,.0f}" for col in display_columns if col != "Scrap (Qt)"}), use_container_width=True, hide_index=True)
+
+with page_tab4:
+    st.title("Material Forecasting")
+    st.subheader("1. RM Purchase (Rs in Lacs)")
+    st.dataframe(df_rm_purchase_val_final.style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
+    st.subheader("2. RM Consumption (Rs in Lacs)")
+    st.dataframe(df_rm_consumption_val_final.style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
+    st.subheader("3. RM Loss (Rs in Lacs)")
+    st.dataframe(df_rm_loss_val_final.style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
 # -----------------------------------------------------------------------------
 # CHAPTER 6: GLOBAL EXCEL PIPELINE DOWNSTREAM COMPILER
 # -----------------------------------------------------------------------------
@@ -313,8 +423,9 @@ try:
         master_prod_flow_df.to_excel(writer, sheet_name="FG Flow Ledger", index=False)
         df_summary_prod.to_excel(writer, sheet_name="Summary Production", index=False)
         master_rm_flow_df.to_excel(writer, sheet_name="RM Flow Ledger", index=False)
-        df_rm_consumption_final.to_excel(writer, sheet_name="RM Consumption", index=False)
+        df_rm_consumption_final.to_excel(writer, sheet_name="RM Consumption Vol", index=False)
         df_scrap_final.to_excel(writer, sheet_name="Visible Scrap Report", index=False)
+        df_rm_purchase_val_final.to_excel(writer, sheet_name="RM Procurement Financials", index=False)
     excel_data = output_buffer.getvalue()
 except ModuleNotFoundError:
     with pd.ExcelWriter(output_buffer, engine="xlsxwriter") as writer:
@@ -323,13 +434,14 @@ except ModuleNotFoundError:
         master_prod_flow_df.to_excel(writer, sheet_name="FG Flow Ledger", index=False)
         df_summary_prod.to_excel(writer, sheet_name="Summary Production", index=False)
         master_rm_flow_df.to_excel(writer, sheet_name="RM Flow Ledger", index=False)
-        df_rm_consumption_final.to_excel(writer, sheet_name="RM Consumption", index=False)
+        df_rm_consumption_final.to_excel(writer, sheet_name="RM Consumption Vol", index=False)
         df_scrap_final.to_excel(writer, sheet_name="Visible Scrap Report", index=False)
+        df_rm_purchase_val_final.to_excel(writer, sheet_name="RM Procurement Financials", index=False)
     excel_data = output_buffer.getvalue()
 
 st.download_button(
     label="📥 Download Updated Comprehensive Interconnected Workbook",
     data=excel_data,
-    file_name="Sales_Production_And_RM_Forecasting_Report.xlsx",
+    file_name="Sales_Production_And_RM_Valuation_Forecasting_Report.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
