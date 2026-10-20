@@ -8,16 +8,17 @@ from io import BytesIO
 # -----------------------------------------------------------------------------
 st.set_page_config(page_title="Corporate Forecast Cockpit", layout="wide")
 
-# Inject Custom CSS to freeze the navigation tabs at the top of the viewport
+# Corrected CSS Injection script ensuring the top tab layout navigation component stays strictly frozen
 st.markdown("""
     <style>
-    div[data-testid="stHorizontalBlock"] {
+    div[data-testid="stTabs"] {
         position: sticky;
         top: 0;
         background-color: white;
         z-index: 999;
-        padding-top: 10px;
-        border-bottom: 1px solid #f0f2f6;
+        padding-top: 5px;
+        padding-bottom: 5px;
+        border-bottom: 2px solid #f0f2f6;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -36,7 +37,7 @@ if "sidebar_qty_df" not in st.session_state:
         "P3": [1000.0] * 12
     })
 
-# 2. Initialize Price Rate Parameters Matrix with requested new defaults
+# 2. Initialize Price Rate Parameters Matrix with request defaults
 if "sidebar_rate_df" not in st.session_state:
     st.session_state.sidebar_rate_df = pd.DataFrame({
         "Timeline": months + future_years,
@@ -87,17 +88,32 @@ if "sidebar_rm_inflation_df" not in st.session_state:
         "Timeline": ["Year 2 Price Inflation (%)", "Year 3 Price Inflation (%)", "Year 4 Price Inflation (%)", "Year 5 Price Inflation (%)"],
         "Inflation Rates (%)": [5.0, 5.0, 5.0, 5.0]
     })
+
+if "active_tab_sync" not in st.session_state:
+    st.session_state.active_tab_sync = "Revenue"
+
+if "pl_depth_level" not in st.session_state:
+    st.session_state.pl_depth_level = 1
 # -----------------------------------------------------------------------------
 # CHAPTER 2: SIDEBAR CONTROL PANEL DESK
 # -----------------------------------------------------------------------------
+radio_options = ["Sales / FG Feed", "RM Qt Feed", "RM Val Feed"]
+default_radio_idx = 0
+if st.session_state.active_tab_sync in ["Revenue", "FG"]:
+    default_radio_idx = 0
+elif st.session_state.active_tab_sync == "RM Qt":
+    default_radio_idx = 1
+elif st.session_state.active_tab_sync in ["RM Val", "PL"]:
+    default_radio_idx = 2
+
 with st.sidebar:
     st.header("⚙️ Workspace Configuration Cockpit")
     
-    # Global Nav context configuration router switch
     sidebar_context = st.radio(
         "🎯 Focus Workspace Target Viewport Context:",
-        options=["Sales / FG Feed", "RM Qt Feed", "RM Val Feed"],
-        help="Switches input priorities to match the page you are working on."
+        options=radio_options,
+        index=default_radio_idx,
+        key="sidebar_context_radio_widget"
     )
     st.markdown("---")
 
@@ -122,7 +138,6 @@ with st.sidebar:
         edited_prod_params_df = st.data_editor(st.session_state.sidebar_prod_params_df, hide_index=True, column_config={"Parameters": st.column_config.TextColumn(disabled=True)})
         st.session_state.sidebar_prod_params_df = edited_prod_params_df
         
-        # Preserve unchanged states in cache
         edited_bom_df = st.session_state.sidebar_bom_df
         edited_rm_logistics_df = st.session_state.sidebar_rm_logistics_df
         edited_rm_price_df = st.session_state.sidebar_rm_price_df
@@ -139,7 +154,6 @@ with st.sidebar:
         edited_rm_logistics_df = st.data_editor(st.session_state.sidebar_rm_logistics_df, hide_index=True, column_config={"Raw Material": st.column_config.TextColumn(disabled=True)})
         st.session_state.sidebar_rm_logistics_df = edited_rm_logistics_df
         
-        # Pull unchanged records from data states
         edited_qty_df = st.session_state.sidebar_qty_df
         edited_rate_df = st.session_state.sidebar_rate_df
         edited_prod_params_df = st.session_state.sidebar_prod_params_df
@@ -158,7 +172,6 @@ with st.sidebar:
         edited_rm_inflation_df = st.data_editor(st.session_state.sidebar_rm_inflation_df, hide_index=True, column_config={"Timeline": st.column_config.TextColumn(disabled=True)})
         st.session_state.sidebar_rm_inflation_df = edited_rm_inflation_df
         
-        # Pull unchanged records from data states
         edited_qty_df = st.session_state.sidebar_qty_df
         edited_rate_df = st.session_state.sidebar_rate_df
         edited_prod_params_df = st.session_state.sidebar_prod_params_df
@@ -174,8 +187,8 @@ prod_sales_matrix, fg_cl_matrix, fg_op_matrix, fg_prod_matrix = {}, {}, {}, {}
 def safe_float(val):
     if pd.isna(val) or val == "" or val is None: return 0.0
     try:
-        if isinstance(val, (list, np.ndarray)) and len(val) > 0:
-            return float(val[0])
+        if isinstance(val, (list, np.ndarray, pd.Series)):
+            return float(val[0]) if len(val) > 0 else 0.0
         return float(val)
     except: return 0.0
 
@@ -308,12 +321,16 @@ for rm in raw_materials:
 rm_purch_val_matrix = {rm: [0.0]*17 for rm in raw_materials}
 rm_cons_val_matrix = {rm: [0.0]*17 for rm in raw_materials}
 rm_loss_val_matrix = {rm: [0.0]*17 for rm in raw_materials}
+rm_op_val_matrix = {rm: [0.0]*17 for rm in raw_materials}
+rm_cl_val_matrix = {rm: [0.0]*17 for rm in raw_materials}
 
 for rm in raw_materials:
     for idx in range(17):
         rm_purch_val_matrix[rm][idx] = (rm_purch_matrix[rm][idx] * rm_price_horizon[rm][idx]) / 100000.0
         rm_cons_val_matrix[rm][idx] = (rm_gross_cons_matrix[rm][idx] * rm_price_horizon[rm][idx]) / 100000.0
         rm_loss_val_matrix[rm][idx] = (rm_total_loss_matrix[rm][idx] * rm_price_horizon[rm][idx]) / 100000.0
+        rm_op_val_matrix[rm][idx] = (rm_op_matrix[rm][idx] * rm_price_horizon[rm][idx]) / 100000.0
+        rm_cl_val_matrix[rm][idx] = (rm_cl_matrix[rm][idx] * rm_price_horizon[rm][idx]) / 100000.0
 # -----------------------------------------------------------------------------
 # CHAPTER 4: COMPILING TABULAR STRUCTURES WITH TOTALS
 # -----------------------------------------------------------------------------
@@ -366,10 +383,68 @@ df_scrap_final = pd.concat([df_scrap_final, pd.DataFrame([t_scrap_row])], ignore
 df_rm_purchase_val_final = compile_report(rm_purch_val_matrix, "Raw Material")
 df_rm_consumption_val_final = compile_report(rm_cons_val_matrix, "Raw Material")
 df_rm_loss_val_final = compile_report(rm_loss_val_matrix, "Raw Material")
+df_rm_op_val_final = compile_report(rm_op_val_matrix, "Raw Material")
+df_rm_cl_val_final = compile_report(rm_cl_val_matrix, "Raw Material")
+# 4.4 Advanced Multi-Level Apparent Hierarchical P&L Matrix Assembly Engine
+pl_rows = []
+
+def append_pl_row(si_no, lvl1, lvl2, lvl3, data_series, format_as_pct=False):
+    row_dict = {"Si No": si_no, "Level 1": lvl1, "Level 2": lvl2, "Level 3": lvl3}
+    for col_idx, col_name in enumerate(display_columns):
+        row_dict[col_name] = data_series[col_idx]
+    row_dict["_is_pct"] = format_as_pct
+    pl_rows.append(row_dict)
+
+# BLOCK 1: Sale (Qt)
+append_pl_row("1", "Sale (Qt) :", "", "", [sum(qty_matrix[p][i] for p in products) for i in range(17)])
+for p in products:
+    append_pl_row("", "", p, "", qty_matrix[p])
+
+# BLOCK 2: Production (Qt)
+append_pl_row("2", "Production (Qt) :", "", "", [sum(fg_prod_matrix[p][i] for p in products) for i in range(17)])
+for p in products:
+    append_pl_row("", "", p, "", fg_prod_matrix[p])
+
+# BLOCK 3: Revenue (Rs in Lacs)
+append_pl_row("3", "Revenue (Rs) :", "", "", [sum(rev_matrix[p][i] for p in products)/100000.0 for i in range(17)])
+for p in products:
+    append_pl_row("", "", p, "", [v/100000.0 for v in rev_matrix[p]])
+
+# BLOCK 4: RM Consumption (Rs in Lacs) Nested Continuous Pipelines
+append_pl_row("4", "RM Consumption (Rs) :", "", "", [sum(rm_cons_val_matrix[rm][i] for rm in raw_materials) for i in range(17)])
+for rm in raw_materials:
+    append_pl_row("", "", rm, "", rm_cons_val_matrix[rm])
+    append_pl_row("", "", "", "Opening stk", rm_op_val_matrix[rm])
+    append_pl_row("", "", "", "Purchase", rm_purch_val_matrix[rm])
+    append_pl_row("", "", "", "Consumption", rm_cons_val_matrix[rm])
+    append_pl_row("", "", "", "Cl stock", rm_cl_val_matrix[rm])
+
+# BLOCK 5: RM Consumption (%) on Revenue margins
+total_rev_lacs = [sum(rev_matrix[p][i] for p in products)/100000.0 for i in range(17)]
+total_cons_lacs = [sum(rm_cons_val_matrix[rm][i] for rm in raw_materials) for i in range(17)]
+pct_series = [(c / r * 100.0 if r > 0 else 0.0) for c, r in zip(total_cons_lacs, total_rev_lacs)]
+append_pl_row("5", "RM Consumption (%) (4/3)", "", "", pct_series, format_as_pct=True)
+for rm in raw_materials:
+    rm_pct_series = [(rm_cons_val_matrix[rm][i] / total_rev_lacs[i] * 100.0 if total_rev_lacs[i] > 0 else 0.0) for i in range(17)]
+    append_pl_row("", "", rm, "", rm_pct_series, format_as_pct=True)
+
+# BLOCK 6 & 7: COGS Calculations
+append_pl_row("6", "COGS (3-4)", "", "", [r - c for r, c in zip(total_rev_lacs, total_cons_lacs)])
+cogs_pct_series = [((r - c) / r * 100.0 if r > 0 else 0.0) for c, r in zip(total_cons_lacs, total_rev_lacs)]
+append_pl_row("7", "COGS % (6/3)", "", "", cogs_pct_series, format_as_pct=True)
+
+df_pl_master_raw = pd.DataFrame(pl_rows)
 # -----------------------------------------------------------------------------
 # CHAPTER 5: TOP PANEL NAVIGATION ROUTER & WORKSPACE VIEWPORTS
 # -----------------------------------------------------------------------------
-page_tab1, page_tab2, page_tab3, page_tab4 = st.tabs(["Revenue", "FG", "RM Qt", "RM Val"])
+page_tab1, page_tab2, page_tab3, page_tab4, page_tab5 = st.tabs(["Revenue", "FG", "RM Qt", "RM Val", "PL"])
+
+# Sync current page navigation context back into persistent state variables
+if page_tab1: st.session_state.active_tab_sync = "Revenue"
+if page_tab2: st.session_state.active_tab_sync = "FG"
+if page_tab3: st.session_state.active_tab_sync = "RM Qt"
+if page_tab4: st.session_state.active_tab_sync = "RM Val"
+if page_tab5: st.session_state.active_tab_sync = "PL"
 
 with page_tab1:
     st.title("Sales Forecasting")
@@ -410,6 +485,52 @@ with page_tab4:
     st.dataframe(df_rm_consumption_val_final.style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
     st.subheader("3. RM Loss (Rs in Lacs)")
     st.dataframe(df_rm_loss_val_final.style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
+    st.subheader("4. RM Opening Stock (Rs in Lacs)")
+    st.dataframe(df_rm_op_val_final.style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
+    st.subheader("5. RM Closing Stock (Rs in Lacs)")
+    st.dataframe(df_rm_cl_val_final.style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
+with page_tab5:
+    st.title("PL Forecast")
+    
+    # Hierarchy level tree modifier controller group buttons
+    btn_col1, btn_col2, btn_col3, _ = st.columns([1, 1, 1, 5])
+    with btn_col1:
+        if st.button("Collapse All (L1)", use_container_width=True):
+            st.session_state.pl_depth_level = 1
+    with btn_col2:
+        if st.button("Expand Splits (L2)", use_container_width=True):
+            st.session_state.pl_depth_level = 2
+    with btn_col3:
+        if st.button("Expand Ledger (L3)", use_container_width=True):
+            st.session_state.pl_depth_level = 3
+            
+    # Slice rows using structural hierarchy conditions matching chosen target depth states
+    if st.session_state.pl_depth_level == 1:
+        filtered_pl_df = df_pl_master_raw[df_pl_master_raw["Level 1"] != ""].copy()
+    elif st.session_state.pl_depth_level == 2:
+        filtered_pl_df = df_pl_master_raw[df_pl_master_raw["Level 3"] == ""].copy()
+    else:
+        filtered_pl_df = df_pl_master_raw.copy()
+        
+    display_pl_df = filtered_pl_df.drop(columns=["_is_pct"])
+    
+    # Formats row strings dynamically by looking up row type metadata
+    def format_pl_dataframe(row):
+        is_pct = filtered_pl_df.loc[row.name, "_is_pct"]
+        formatted_row = row.copy()
+        for col in display_columns:
+            val = safe_float(row[col])
+            if is_pct:
+                formatted_row[col] = f"{val:.2f}%"
+            elif row["Level 1"] in ["Sale (Qt) :", "Production (Qt) :"] or (row["Level 2"] != "" and row["Level 1"] == "" and row["Level 2"] not in raw_materials):
+                formatted_row[col] = f"{val:,.0f}"
+            else:
+                formatted_row[col] = f"{val:,.2f} L"
+        return formatted_row
+
+    styled_pl_df = display_pl_df.apply(format_pl_dataframe, axis=1)
+    st.dataframe(styled_pl_df, use_container_width=True, hide_index=True)
+
 # -----------------------------------------------------------------------------
 # CHAPTER 6: GLOBAL EXCEL PIPELINE DOWNSTREAM COMPILER
 # -----------------------------------------------------------------------------
@@ -425,7 +546,7 @@ try:
         master_rm_flow_df.to_excel(writer, sheet_name="RM Flow Ledger", index=False)
         df_rm_consumption_final.to_excel(writer, sheet_name="RM Consumption Vol", index=False)
         df_scrap_final.to_excel(writer, sheet_name="Visible Scrap Report", index=False)
-        df_rm_purchase_val_final.to_excel(writer, sheet_name="RM Procurement Financials", index=False)
+        df_pl_master_raw.to_excel(writer, sheet_name="Master Financial P&L Statement", index=False)
     excel_data = output_buffer.getvalue()
 except ModuleNotFoundError:
     with pd.ExcelWriter(output_buffer, engine="xlsxwriter") as writer:
@@ -436,12 +557,12 @@ except ModuleNotFoundError:
         master_rm_flow_df.to_excel(writer, sheet_name="RM Flow Ledger", index=False)
         df_rm_consumption_final.to_excel(writer, sheet_name="RM Consumption Vol", index=False)
         df_scrap_final.to_excel(writer, sheet_name="Visible Scrap Report", index=False)
-        df_rm_purchase_val_final.to_excel(writer, sheet_name="RM Procurement Financials", index=False)
+        df_pl_master_raw.to_excel(writer, sheet_name="Master Financial P&L Statement", index=False)
     excel_data = output_buffer.getvalue()
 
 st.download_button(
     label="📥 Download Updated Comprehensive Interconnected Workbook",
     data=excel_data,
-    file_name="Sales_Production_And_RM_Valuation_Forecasting_Report.xlsx",
+    file_name="Sales_Production_And_PL_Valuation_Forecasting_Report.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
