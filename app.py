@@ -9,6 +9,7 @@ from io import BytesIO
 st.set_page_config(page_title="Corporate Forecast Cockpit", layout="wide")
 
 products = ["P1", "P2", "P3"]
+raw_materials = [f"RM{i}" for i in range(1, 13)]
 months = [f"M{i}" for i in range(1, 13)]
 future_years = ["Year 2", "Year 3", "Year 4", "Year 5"]
 display_columns = months + ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5"]
@@ -31,7 +32,7 @@ if "sidebar_rate_df" not in st.session_state:
         "P3": [1000.0] * 16
     })
 
-# 3. Initialize Warehouse Parameters metrics matrix
+# 3. Initialize Finished Goods Warehouse Parameters metrics matrix
 if "sidebar_prod_params_df" not in st.session_state:
     st.session_state.sidebar_prod_params_df = pd.DataFrame({
         "Parameters": ["M1 Initial Op Stock Qty", "Target Hold Days (Closing Stock)"],
@@ -40,6 +41,25 @@ if "sidebar_prod_params_df" not in st.session_state:
         "P3": [2500.0, 60.0]
     })
 
+# 4. Initialize Dynamic BOM Matrix Setup with requested default profile structural specs
+if "sidebar_bom_df" not in st.session_state:
+    bom_data = {
+        "RM Name": ["RM1", "RM2", "RM3", "RM4", "RM5", "RM6", "RM1", "RM7", "RM8", "RM9", "RM10", "RM1", "RM11", "RM12"],
+        "Target FG": ["P1", "P1", "P1", "P1", "P1", "P1", "P2", "P2", "P2", "P2", "P2", "P3", "P3", "P3"],
+        "Con%": [0.70, 0.15, 0.05, 0.04, 0.03, 0.03, 0.70, 0.20, 0.03, 0.04, 0.03, 0.70, 0.20, 0.10],
+        "Visible Loss": [0.04] * 14,
+        "Invisible Loss": [0.01] * 14
+    }
+    st.session_state.sidebar_bom_df = pd.DataFrame(bom_data)
+
+# 5. Initialize Raw Material Warehouse Balance Logistics Control parameters
+if "sidebar_rm_logistics_df" not in st.session_state:
+    logistics_data = {
+        "Raw Material": raw_materials,
+        "M1 Initial Op Stock Qty": [13000.0, 1000.0, 1700.0, 100.0, 50.0, 300.0, 300.0, 250.0, 350.0, 250.0, 100.0, 50.0],
+        "Days Hold": [45.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0]
+    }
+    st.session_state.sidebar_rm_logistics_df = pd.DataFrame(logistics_data)
 # -----------------------------------------------------------------------------
 # CHAPTER 2: SIDEBAR CONTROL PANEL DESK
 # -----------------------------------------------------------------------------
@@ -67,6 +87,15 @@ with st.sidebar:
     edited_prod_params_df = st.data_editor(st.session_state.sidebar_prod_params_df, hide_index=True, column_config={"Parameters": st.column_config.TextColumn(disabled=True)})
     st.session_state.sidebar_prod_params_df = edited_prod_params_df
 
+    st.markdown("---")
+    st.subheader("🛠️ 4. RM Recipe Allocations & Losses (BOM)")
+    edited_bom_df = st.data_editor(st.session_state.sidebar_bom_df, hide_index=True, column_config={"RM Name": st.column_config.TextColumn(disabled=True), "Target FG": st.column_config.TextColumn(disabled=True)})
+    st.session_state.sidebar_bom_df = edited_bom_df
+
+    st.markdown("---")
+    st.subheader("🧱 5. RM Inventory Controls (Op Stock / Hold Days)")
+    edited_rm_logistics_df = st.data_editor(st.session_state.sidebar_rm_logistics_df, hide_index=True, column_config={"Raw Material": st.column_config.TextColumn(disabled=True)})
+    st.session_state.sidebar_rm_logistics_df = edited_rm_logistics_df
 # -----------------------------------------------------------------------------
 # CHAPTER 3: ANALYTICAL COMPUTATION LAYER
 # -----------------------------------------------------------------------------
@@ -78,6 +107,7 @@ def safe_float(val):
     try: return float(val)
     except: return 0.0
 
+# 3.1 Finished Goods Analytical Computation Layer
 for p in products:
     q_months = [safe_float(edited_qty_df.loc[edited_qty_df["Timeline"] == m, p].values[0]) for m in months]
     r_months = [safe_float(edited_rate_df.loc[edited_rate_df["Timeline"] == m, p].values[0]) for m in months]
@@ -124,22 +154,84 @@ for p in products:
 
     prod_sales_matrix[p], fg_cl_matrix[p], fg_op_matrix[p], fg_prod_matrix[p] = p_sales, p_cl, p_op, p_prod
 
+# 3.2 Raw Material Advanced Analytical Computational Engine
+rm_gross_cons_matrix = {rm: [0.0]*17 for rm in raw_materials}
+rm_total_loss_matrix = {rm: [0.0]*17 for rm in raw_materials}
+fg_scrap_matrix = {p: [0.0]*17 for p in products}
+
+# Process monthly matrices (0 to 11) and outer macro brackets (13 to 16)
+valid_time_indices = [i for i in range(17) if i != 12]
+
+for idx in valid_time_indices:
+    for _, row in edited_bom_df.iterrows():
+        rm = row["RM Name"]
+        p = row["Target FG"]
+        c_pct = safe_float(row["Con%"])
+        v_loss = safe_float(row["Visible Loss"])
+        i_loss = safe_float(row["Invisible Loss"])
+        
+        fg_production_qty = fg_prod_matrix[p][idx]
+        denom = (1.0 - v_loss - i_loss)
+        
+        if denom > 0:
+            gross_c = (fg_production_qty * c_pct) / denom
+            v_scrap_val = gross_c * v_loss
+            total_loss_val = gross_c * (v_loss + i_loss)
+        else:
+            gross_c, v_scrap_val, total_loss_val = 0.0, 0.0, 0.0
+            
+        rm_gross_cons_matrix[rm][idx] += gross_c
+        rm_total_loss_matrix[rm][idx] += total_loss_val
+        fg_scrap_matrix[p][idx] += v_scrap_val
+
+# Process Year 1 Consolidation sums (Index 12)
+for rm in raw_materials:
+    rm_gross_cons_matrix[rm][12] = sum(rm_gross_cons_matrix[rm][0:12])
+    rm_total_loss_matrix[rm][12] = sum(rm_total_loss_matrix[rm][0:12])
+for p in products:
+    fg_scrap_matrix[p][12] = sum(fg_scrap_matrix[p][0:12])
+
+# Complete Raw Material Movement Inventory Flow Calculations
+rm_op_matrix = {rm: [0.0]*17 for rm in raw_materials}
+rm_cl_matrix = {rm: [0.0]*17 for rm in raw_materials}
+rm_purch_matrix = {rm: [0.0]*17 for rm in raw_materials}
+
+for rm in raw_materials:
+    m1_op_rm = safe_float(edited_rm_logistics_df.loc[edited_rm_logistics_df["Raw Material"] == rm, "M1 Initial Op Stock Qty"].values[0])
+    days_hold_rm = safe_float(edited_rm_logistics_df.loc[edited_rm_logistics_df["Raw Material"] == rm, "Days Hold"].values[0])
+    
+    for idx in range(12):
+        rm_cl_matrix[rm][idx] = (rm_gross_cons_matrix[rm][idx] / 30.0) * days_hold_rm
+    rm_op_matrix[rm][0] = m1_op_rm
+    for idx in range(1, 12):
+        rm_op_matrix[rm][idx] = rm_cl_matrix[rm][idx - 1]
+    for idx in range(12):
+        rm_purch_matrix[rm][idx] = max(0.0, rm_gross_cons_matrix[rm][idx] + rm_cl_matrix[rm][idx] - rm_op_matrix[rm][idx])
+        
+    rm_op_matrix[rm][12] = rm_op_matrix[rm][0]
+    rm_cl_matrix[rm][12] = rm_cl_matrix[rm][11]
+    rm_purch_matrix[rm][12] = sum(rm_purch_matrix[rm][0:12])
+    
+    horizon_map = {"Year 2": 13, "Year 3": 14, "Year 4": 15, "Year 5": 16}
+    prev_map = {"Year 2": 12, "Year 3": 13, "Year 4": 14, "Year 5": 15}
+    for yr, idx in horizon_map.items():
+        rm_op_matrix[rm][idx] = rm_cl_matrix[rm][prev_map[yr]]
+        rm_cl_matrix[rm][idx] = ((rm_gross_cons_matrix[rm][idx] / 12.0) / 30.0) * days_hold_rm
+        rm_purch_matrix[rm][idx] = max(0.0, rm_gross_cons_matrix[rm][idx] + rm_cl_matrix[rm][idx] - rm_op_matrix[rm][idx])
 # -----------------------------------------------------------------------------
 # CHAPTER 4: COMPILING TABULAR STRUCTURES WITH TOTALS
 # -----------------------------------------------------------------------------
-def compile_report(matrix_dict, is_rev=False):
+def compile_report(matrix_dict, main_key="Product"):
     df = pd.DataFrame(matrix_dict, index=display_columns).T
-    df.insert(0, "Product", df.index)
-    t_row = {"Product": "Total"}
+    df.insert(0, main_key, df.index)
+    t_row = {main_key: "Total"}
     for col in display_columns: t_row[col] = df[col].sum()
     return pd.concat([df, pd.DataFrame([t_row])], ignore_index=True)
 
-df_rev_final = compile_report(rev_matrix)
+df_rev_final = compile_report(rev_matrix, "Product")
 df_rev_final.iloc[0:, 1:] = df_rev_final.iloc[0:, 1:] / 100000.0
-df_qty_final = compile_report(qty_matrix)
-df_rate_final = pd.DataFrame(rate_matrix, index=display_columns).T.reset_index().rename(columns={"index": "Product"})
+df_qty_final = compile_report(qty_matrix, "Product")
 
-# Format Finished Goods Stacked Summary Reports Matrix
 all_prod_dfs = []
 for p in products:
     p_flow_df = pd.DataFrame({"Product": [p, "", "", ""], "FG Inventory Metrics": ["1. Opening Stock", "2. Sales Qty", "3. Production Qty", "4. Closing Stock"]})
@@ -148,39 +240,66 @@ for p in products:
     all_prod_dfs.append(p_flow_df)
 master_prod_flow_df = pd.concat(all_prod_dfs, ignore_index=True)
 
-df_summary_prod = compile_report(fg_prod_matrix)
-df_summary_op = compile_report(fg_op_matrix)
-df_summary_cl = compile_report(fg_cl_matrix)
+df_summary_prod = compile_report(fg_prod_matrix, "Product")
+df_summary_op = compile_report(fg_op_matrix, "Product")
+df_summary_cl = compile_report(fg_cl_matrix, "Product")
 
+# 4.2 Raw Material Output Matrix Compilations
+all_rm_flow_rows = []
+for rm in raw_materials:
+    rm_block = pd.DataFrame({
+        "Raw Material": [rm, "", "", ""],
+        "RM Flow(Qt) Metrics": ["Op stk", "Generated / Purchased", "Consumption", "Cl stk"]
+    })
+    for idx, col in enumerate(display_columns):
+        rm_block[col] = [rm_op_matrix[rm][idx], rm_purch_matrix[rm][idx], rm_gross_cons_matrix[rm][idx], rm_cl_matrix[rm][idx]]
+    all_rm_flow_rows.append(rm_block)
+master_rm_flow_df = pd.concat(all_rm_flow_rows, ignore_index=True)
+
+df_rm_consumption_final = compile_report(rm_gross_cons_matrix, "Raw Material")
+df_rm_purchase_final = compile_report(rm_purch_matrix, "Raw Material")
+df_rm_loss_final = compile_report(rm_total_loss_matrix, "Raw Material")
+
+df_scrap_final = pd.DataFrame(fg_scrap_matrix, index=display_columns).T
+df_scrap_final.insert(0, "Scrap (Qt)", ["Scrap P1 (SP1)", "Scrap P2 (SP2)", "Scrap P3 (SP3)"])
+t_scrap_row = {"Scrap (Qt)": "Total"}
+for col in display_columns: t_scrap_row[col] = df_scrap_final[col].sum()
+df_scrap_final = pd.concat([df_scrap_final, pd.DataFrame([t_scrap_row])], ignore_index=True)
 # -----------------------------------------------------------------------------
 # CHAPTER 5: TOP PANEL NAVIGATION ROUTER & WORKSPACE VIEWPORTS
 # -----------------------------------------------------------------------------
-page_tab1, page_tab2 = st.tabs(["Revenue", "FG"])
+page_tab1, page_tab2, page_tab3 = st.tabs(["Revenue", "FG", "RM"])
 
 with page_tab1:
     st.title("Sales Forecasting")
-    
     st.subheader("1. Revenue (Rs in Lacs)")
     st.dataframe(df_rev_final.style.format({col: "{:,.2f} L" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
-    
     st.subheader("2. Sale (Qt)")
     st.dataframe(df_qty_final.style.format({col: "{:,.0f}" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
 
 with page_tab2:
     st.title("Production Forecasting")
-    
     st.subheader("1. FG Flow (Qt)")
     st.dataframe(master_prod_flow_df.style.format({col: "{:,.0f}" for col in display_columns if col not in ["Product", "FG Inventory Metrics"]}), use_container_width=True, hide_index=True)
-    
     st.subheader("2. Production (Qt)")
     st.dataframe(df_summary_prod.style.format({col: "{:,.0f}" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
-    
     st.subheader("3. FG Closing Stock (Qt)")
     st.dataframe(df_summary_cl.style.format({col: "{:,.0f}" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
-    
     st.subheader("4. FG Opening Stock (Qt)")
     st.dataframe(df_summary_op.style.format({col: "{:,.0f}" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
 
+with page_tab3:
+    st.title("RM Forecasting")
+    st.subheader("1. RM Flow (Qt)")
+    st.dataframe(master_rm_flow_df.style.format({col: "{:,.0f}" for col in display_columns if col not in ["Raw Material", "RM Flow(Qt) Metrics"]}), use_container_width=True, hide_index=True)
+    st.subheader("2. RM Consumption (Qt)")
+    st.dataframe(df_rm_consumption_final.style.format({col: "{:,.0f}" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
+    st.subheader("3. RM Purchase (Qt)")
+    st.dataframe(df_rm_purchase_final.style.format({col: "{:,.0f}" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
+    st.subheader("4. RM Loss (Qt)")
+    st.dataframe(df_rm_loss_final.style.format({col: "{:,.0f}" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
+    st.subheader("5. Scrap (Qt)")
+    st.dataframe(df_scrap_final.style.format({col: "{:,.0f}" for col in display_columns if col != "Scrap (Qt)"}), use_container_width=True, hide_index=True)
 # -----------------------------------------------------------------------------
 # CHAPTER 6: GLOBAL EXCEL PIPELINE DOWNSTREAM COMPILER
 # -----------------------------------------------------------------------------
@@ -193,17 +312,24 @@ try:
         df_qty_final.to_excel(writer, sheet_name="Quantity Volumes", index=False)
         master_prod_flow_df.to_excel(writer, sheet_name="FG Flow Ledger", index=False)
         df_summary_prod.to_excel(writer, sheet_name="Summary Production", index=False)
+        master_rm_flow_df.to_excel(writer, sheet_name="RM Flow Ledger", index=False)
+        df_rm_consumption_final.to_excel(writer, sheet_name="RM Consumption", index=False)
+        df_scrap_final.to_excel(writer, sheet_name="Visible Scrap Report", index=False)
     excel_data = output_buffer.getvalue()
 except ModuleNotFoundError:
     with pd.ExcelWriter(output_buffer, engine="xlsxwriter") as writer:
         df_rev_final.to_excel(writer, sheet_name="Revenue (Lacs)", index=False)
         df_qty_final.to_excel(writer, sheet_name="Quantity Volumes", index=False)
-master_prod_flow_df.to_excel(writer, sheet_name="FG Flow Ledger", index=False)
-df_summary_prod.to_excel(writer, sheet_name="Summary Production", index=False)
-excel_data = output_buffer.getvalue()
+        master_prod_flow_df.to_excel(writer, sheet_name="FG Flow Ledger", index=False)
+        df_summary_prod.to_excel(writer, sheet_name="Summary Production", index=False)
+        master_rm_flow_df.to_excel(writer, sheet_name="RM Flow Ledger", index=False)
+        df_rm_consumption_final.to_excel(writer, sheet_name="RM Consumption", index=False)
+        df_scrap_final.to_excel(writer, sheet_name="Visible Scrap Report", index=False)
+    excel_data = output_buffer.getvalue()
+
 st.download_button(
-label="📥 Download Updated Comprehensive Interconnected Workbook",
-data=excel_data,
-file_name="Sales_And_Production_Forecasting_Report.xlsx",
-mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    label="📥 Download Updated Comprehensive Interconnected Workbook",
+    data=excel_data,
+    file_name="Sales_Production_And_RM_Forecasting_Report.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
