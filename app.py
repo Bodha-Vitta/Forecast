@@ -1,4 +1,4 @@
-import streamlit st
+import streamlit as st
 import pandas as pd
 import numpy as np
 from io import BytesIO
@@ -109,9 +109,6 @@ if "pl_nodes_state" not in st.session_state:
 
 if "active_tab_sync" not in st.session_state:
     st.session_state.active_tab_sync = "Revenue"
-
-if "pl_depth_level" not in st.session_state:
-    st.session_state.pl_depth_level = 1
 # -----------------------------------------------------------------------------
 # CHAPTER 2: SIDEBAR CONTROL PANEL DESK
 # -----------------------------------------------------------------------------
@@ -258,7 +255,7 @@ for p in products:
     
     for idx in range(12): p_cl[idx] = (hold_days / 30.0) * p_sales[idx]
     
-    # FIXED Assignment logic: maps starting balance index cleanly
+    # FIXED: Re-assignment to list block ensuring type-safety assignment properties
     p_op[0] = m1_op_input
     for idx in range(1, 12): p_op[idx] = p_cl[idx - 1]
     for idx in range(12): p_prod[idx] = p_sales[idx] + p_cl[idx] - p_op[idx]
@@ -536,7 +533,7 @@ with page_tab4:
     st.subheader("3. RM Consumption (Rs in Lacs)")
     st.dataframe(df_rm_consumption_val_final.style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
     st.subheader("4. RM Loss (Rs in Lacs)")
-    st.dataframe(df_rm_loss_val_final.style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
+    st.dataframe(df_rm_loss_final.style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
     st.subheader("5. RM Opening Stock (Rs in Lacs)")
     st.dataframe(df_rm_op_val_final.style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
     st.subheader("6. RM Closing Stock (Rs in Lacs)")
