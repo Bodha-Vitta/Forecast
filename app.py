@@ -111,6 +111,31 @@ if "pl_editor_ver" not in st.session_state:
 # Volume-growth inputs live in the Sales sidebar only; keep their values when another feed is shown
 if "growth_saved" not in st.session_state:
     st.session_state.growth_saved = [5.0, 5.0, 5.0, 5.0]
+
+# ---- STAGE 6: DIRECT EXPENSES FEED (new) ----
+direct_heads = ["Direct Wages", "Power & Fuel", "Repair & Maintenance", "Carriage inward", "Other Direct OH"]
+dx_common_heads = ["Carriage inward", "Other Direct OH"]      # one rate applied to every product
+dx_short = {"Direct Wages": "Wages", "Power & Fuel": "Power & Fuel", "Repair & Maintenance": "R&M",
+            "Carriage inward": "Carriage", "Other Direct OH": "Other OH"}
+
+# Rate per unit of production (Rs) - product-wise heads
+if "sidebar_dx_rate_df" not in st.session_state:
+    st.session_state.sidebar_dx_rate_df = pd.DataFrame({
+        "Expense Head": ["Direct Wages", "Power & Fuel", "Repair & Maintenance"],
+        "P1": [7.0, 5.0, 1.0], "P2": [8.0, 6.0, 1.5], "P3": [9.0, 7.0, 2.0]
+    })
+# Rate per unit of production (Rs) - single rate for all products
+if "sidebar_dx_common_df" not in st.session_state:
+    st.session_state.sidebar_dx_common_df = pd.DataFrame({
+        "Expense Head": dx_common_heads, "Rate p.u. (all products)": [3.5, 2.0]
+    })
+# YoY inflation (%) for Y2-Y5, every head
+if "sidebar_dx_infl_df" not in st.session_state:
+    st.session_state.sidebar_dx_infl_df = pd.DataFrame({
+        "Expense Head": direct_heads,
+        "Year 2 (%)": [5.0, 3.0, 2.0, 5.0, 2.0], "Year 3 (%)": [5.0, 3.0, 2.0, 5.0, 2.0],
+        "Year 4 (%)": [5.0, 3.0, 2.0, 5.0, 2.0], "Year 5 (%)": [5.0, 3.0, 2.0, 5.0, 2.0]
+    })
 # -----------------------------------------------------------------------------
 # CHAPTER 2: SIDEBAR CONTROL PANEL DESK
 # -----------------------------------------------------------------------------
@@ -121,10 +146,15 @@ with st.sidebar:
     st.header("⚙️ Workspace Configuration Cockpit")
     sidebar_context = st.radio(
         "🎯 Focus Workspace Target Viewport Context:",
-        options=["Sales / FG Feed", "RM Qt Feed", "RM Val Feed"],
+        options=["Sales / FG Feed", "RM Qt Feed", "RM Val Feed", "Direct Expenses Feed"],
         key="synchronized_sidebar_context_radio_widget"
     )
     st.markdown("---")
+
+    # Direct Expenses feed tables (edited only inside the Direct Expenses Feed desk below)
+    edited_dx_rate_df = st.session_state.sidebar_dx_rate_df
+    edited_dx_common_df = st.session_state.sidebar_dx_common_df
+    edited_dx_infl_df = st.session_state.sidebar_dx_infl_df
 
     if sidebar_context == "Sales / FG Feed":
         st.header("📊 1. Sales & FG Feed Desk")
@@ -154,13 +184,25 @@ with st.sidebar:
         st.session_state.sidebar_rm_logistics_df = edited_rm_logistics_df
         edited_qty_df, edited_rate_df, edited_fg_inflation_df, edited_prod_params_df, edited_rm_price_df, edited_rm_inflation_df = st.session_state.sidebar_qty_df, st.session_state.sidebar_rate_df, st.session_state.sidebar_fg_inflation_df, st.session_state.sidebar_prod_params_df, st.session_state.sidebar_rm_price_df, st.session_state.sidebar_rm_inflation_df
         g_y2, g_y3, g_y4, g_y5 = [x / 100.0 for x in st.session_state.growth_saved]
-    else:
+    elif sidebar_context == "RM Val Feed":
         st.header("💰 3. RM Val Feed Desk")
         edited_rm_price_df = st.data_editor(st.session_state.sidebar_rm_price_df, hide_index=True, column_config={"Raw Material": st.column_config.TextColumn(disabled=True)})
         st.session_state.sidebar_rm_price_df = edited_rm_price_df
         edited_rm_inflation_df = st.data_editor(st.session_state.sidebar_rm_inflation_df, hide_index=True, column_config={"Timeline": st.column_config.TextColumn(disabled=True)})
         st.session_state.sidebar_rm_inflation_df = edited_rm_inflation_df
         edited_qty_df, edited_rate_df, edited_fg_inflation_df, edited_prod_params_df, edited_bom_df, edited_rm_logistics_df = st.session_state.sidebar_qty_df, st.session_state.sidebar_rate_df, st.session_state.sidebar_fg_inflation_df, st.session_state.sidebar_prod_params_df, st.session_state.sidebar_bom_df, st.session_state.sidebar_rm_logistics_df
+        g_y2, g_y3, g_y4, g_y5 = [x / 100.0 for x in st.session_state.growth_saved]
+    else:
+        st.header("🏭 4. Direct Expenses Feed Desk")
+        st.caption("Rate per unit of production (Rs) - applied to Production Qt")
+        edited_dx_rate_df = st.data_editor(st.session_state.sidebar_dx_rate_df, hide_index=True, column_config={"Expense Head": st.column_config.TextColumn(disabled=True)})
+        st.session_state.sidebar_dx_rate_df = edited_dx_rate_df
+        edited_dx_common_df = st.data_editor(st.session_state.sidebar_dx_common_df, hide_index=True, column_config={"Expense Head": st.column_config.TextColumn(disabled=True)})
+        st.session_state.sidebar_dx_common_df = edited_dx_common_df
+        st.caption("YoY inflation (%) on rate p.u. - Year 2 to Year 5")
+        edited_dx_infl_df = st.data_editor(st.session_state.sidebar_dx_infl_df, hide_index=True, column_config={"Expense Head": st.column_config.TextColumn(disabled=True)})
+        st.session_state.sidebar_dx_infl_df = edited_dx_infl_df
+        edited_qty_df, edited_rate_df, edited_fg_inflation_df, edited_prod_params_df, edited_bom_df, edited_rm_logistics_df, edited_rm_price_df, edited_rm_inflation_df = st.session_state.sidebar_qty_df, st.session_state.sidebar_rate_df, st.session_state.sidebar_fg_inflation_df, st.session_state.sidebar_prod_params_df, st.session_state.sidebar_bom_df, st.session_state.sidebar_rm_logistics_df, st.session_state.sidebar_rm_price_df, st.session_state.sidebar_rm_inflation_df
         g_y2, g_y3, g_y4, g_y5 = [x / 100.0 for x in st.session_state.growth_saved]
 # -----------------------------------------------------------------------------
 # CHAPTER 3: ANALYTICAL COMPUTATION LAYER
@@ -290,6 +332,68 @@ for rm in raw_materials:
         rm_op_val_matrix[rm][idx] = (rm_op_matrix[rm][idx] * rm_price_horizon[rm][idx]) / 100000.0
         rm_cl_val_matrix[rm][idx] = (rm_cl_matrix[rm][idx] * rm_price_horizon[rm][idx]) / 100000.0
 # -----------------------------------------------------------------------------
+# CHAPTER 3B (NEW): PRODUCT-WISE RM SPLIT (for slicers / product COGS) + DIRECT EXPENSES
+# -----------------------------------------------------------------------------
+# Product-wise RM consumption & loss, same BOM formula as above (existing matrices untouched)
+rm_cons_p = {p: {rm: [0.0] * 17 for rm in raw_materials} for p in products}
+rm_loss_p = {p: {rm: [0.0] * 17 for rm in raw_materials} for p in products}
+for idx in valid_time_indices:
+    for _, row in edited_bom_df.iterrows():
+        rm, p, c_pct, v_loss, i_loss = row["RM Name"], row["Target FG"], safe_float(row["Con%"]), safe_float(row["Visible Loss"]), safe_float(row["Invisible Loss"])
+        denom = (1.0 - v_loss - i_loss)
+        if denom > 0:
+            gross_c = (fg_prod_matrix[p][idx] * c_pct) / denom
+            rm_cons_p[p][rm][idx] += gross_c
+            rm_loss_p[p][rm][idx] += gross_c * (v_loss + i_loss)
+for p in products:
+    for rm in raw_materials:
+        rm_cons_p[p][rm][12] = sum(rm_cons_p[p][rm][0:12])
+        rm_loss_p[p][rm][12] = sum(rm_loss_p[p][rm][0:12])
+
+# RMs used by each product (RM1 is shared, so stock / purchase are split by consumption share)
+used_rms = {p: [rm for rm in raw_materials if any(v > 0 for v in rm_cons_p[p][rm])] for p in products}
+
+def alloc_by_share(total_matrix, p, kind):
+    out = {}
+    for rm in raw_materials:
+        tot, mine = rm_gross_cons_matrix[rm], rm_cons_p[p][rm]
+        s = [((total_matrix[rm][i] * mine[i] / tot[i]) if tot[i] > 0 else 0.0) for i in range(17)]
+        if kind == "sum":   s[12] = sum(s[0:12])      # Year 1 purchase = sum of months
+        elif kind == "op":  s[12] = s[0]              # Year 1 opening = M1 opening
+        elif kind == "cl":  s[12] = s[11]             # Year 1 closing = M12 closing
+        out[rm] = s
+    return out
+
+rm_purch_p = {p: alloc_by_share(rm_purch_matrix, p, "sum") for p in products}
+rm_op_p = {p: alloc_by_share(rm_op_matrix, p, "op") for p in products}
+rm_cl_p = {p: alloc_by_share(rm_cl_matrix, p, "cl") for p in products}
+
+def to_val(by_p):
+    return {p: {rm: [by_p[p][rm][i] * rm_price_horizon[rm][i] / 100000.0 for i in range(17)] for rm in raw_materials} for p in products}
+rm_cons_val_p, rm_purch_val_p, rm_op_val_p, rm_cl_val_p = to_val(rm_cons_p), to_val(rm_purch_p), to_val(rm_op_p), to_val(rm_cl_p)
+rm_cons_val_p_total = {p: [sum(rm_cons_val_p[p][rm][i] for rm in raw_materials) for i in range(17)] for p in products}
+
+# ---- Direct Expenses (Rs in Lacs): Production Qt x Rate p.u.; Y2-Y5 rate compounds yearly inflation ----
+dx_cost = {h: {} for h in direct_heads}
+for h in direct_heads:
+    infl = [safe_float(edited_dx_infl_df.loc[edited_dx_infl_df["Expense Head"] == h, f"Year {y} (%)"].values) / 100.0 for y in (2, 3, 4, 5)]
+    for p in products:
+        if h in dx_common_heads:
+            base = safe_float(edited_dx_common_df.loc[edited_dx_common_df["Expense Head"] == h, "Rate p.u. (all products)"].values)
+        else:
+            base = safe_float(edited_dx_rate_df.loc[edited_dx_rate_df["Expense Head"] == h, p].values)
+        yr_rates, running = [], base
+        for k in range(4):
+            running = running * (1.0 + infl[k])
+            yr_rates.append(running)
+        cost = [0.0] * 17
+        for idx in range(12): cost[idx] = fg_prod_matrix[p][idx] * base / 100000.0
+        cost[12] = sum(cost[0:12])
+        for k, idx in enumerate(range(13, 17)): cost[idx] = fg_prod_matrix[p][idx] * yr_rates[k] / 100000.0
+        dx_cost[h][p] = cost
+dx_total_cost = {p: [sum(dx_cost[h][p][i] for h in direct_heads) for i in range(17)] for p in products}
+
+# -----------------------------------------------------------------------------
 # CHAPTER 4: COMPILING TABULAR STRUCTURES WITH TOTALS
 # -----------------------------------------------------------------------------
 def compile_report(matrix_dict, main_key="Product"):
@@ -380,63 +484,160 @@ for rm in raw_materials:
     rm_pct_series = [(rm_cons_val_matrix[rm][i] / total_rev_lacs[i] * 100.0 if total_rev_lacs[i] > 0 else 0.0) for i in range(17)]
     append_pl_row("", "5", "L2", "", rm, "", rm_pct_series, format_as_pct=True)
 
-append_pl_row("6", "6", "L1", "COGS (3-4)", "", "", [r - c for r, c in zip(total_rev_lacs, total_cons_lacs)])
-cogs_pct_series = [((r - c) / r * 100.0 if r > 0 else 0.0) for c, r in zip(total_cons_lacs, total_rev_lacs)]
-append_pl_row("7", "7", "L1", "COGS % (6/3)", "", "", cogs_pct_series, format_as_pct=True)
+# ---- Rows 6-10: Direct Expense heads (L1 total, L2 product-wise) ----
+for n, h in enumerate(direct_heads):
+    sn = str(6 + n)
+    append_pl_row(sn, sn, "L1", h, "", "", [sum(dx_cost[h][p][i] for p in products) for i in range(17)])
+    for p in products: append_pl_row("", sn, "L2", "", p, "", dx_cost[h][p])
+
+total_dx_lacs = [sum(dx_total_cost[p][i] for p in products) for i in range(17)]
+append_pl_row("11", "11", "L1", "Total Direct Exp (6+7+8+9+10)", "", "", total_dx_lacs)
+for p in products: append_pl_row("", "11", "L2", "", p, "", dx_total_cost[p])
+
+rev_lacs_p = {p: [v / 100000.0 for v in rev_matrix[p]] for p in products}
+cogs_p = {p: [rm_cons_val_p_total[p][i] + dx_total_cost[p][i] for i in range(17)] for p in products}
+cogs_tot = [c + d for c, d in zip(total_cons_lacs, total_dx_lacs)]
+gp_p = {p: [rev_lacs_p[p][i] - cogs_p[p][i] for i in range(17)] for p in products}
+gp_tot = [r - c for r, c in zip(total_rev_lacs, cogs_tot)]
+pct_of = lambda n, d: [(a / b * 100.0 if b > 0 else 0.0) for a, b in zip(n, d)]
+
+append_pl_row("12", "12", "L1", "COGS (4+11)", "", "", cogs_tot)
+for p in products: append_pl_row("", "12", "L2", "", p, "", cogs_p[p])
+append_pl_row("13", "13", "L1", "COGS % (12/3)", "", "", pct_of(cogs_tot, total_rev_lacs), format_as_pct=True)
+for p in products: append_pl_row("", "13", "L2", "", p, "", pct_of(cogs_p[p], rev_lacs_p[p]), format_as_pct=True)
+append_pl_row("14", "14", "L1", "Gross Profit (3-12)", "", "", gp_tot)
+for p in products: append_pl_row("", "14", "L2", "", p, "", gp_p[p])
+append_pl_row("15", "15", "L1", "Gross Profit % (14/3)", "", "", pct_of(gp_tot, total_rev_lacs), format_as_pct=True)
+for p in products: append_pl_row("", "15", "L2", "", p, "", pct_of(gp_p[p], rev_lacs_p[p]), format_as_pct=True)
 
 df_pl_master_raw = pd.DataFrame(pl_rows)
+
+# -----------------------------------------------------------------------------
+# CHAPTER 4B (NEW): PRODUCT SLICER HELPERS (view-only filters; "All" returns the original tables)
+# -----------------------------------------------------------------------------
+def title_with_slicer(title, key):
+    c_title, c_slicer = st.columns([5, 1])
+    with c_title: st.title(title)
+    with c_slicer: return st.selectbox("Product", ["All", "P1", "P2", "P3"], key=key)
+
+def pick_matrix(df_all, matrix, sel, key="Product"):
+    return df_all if sel == "All" else compile_report({sel: matrix[sel]}, key)
+
+def pick_rev(sel):
+    if sel == "All": return df_rev_final
+    d = compile_report({sel: rev_matrix[sel]}, "Product")
+    d.iloc[0:, 1:] = d.iloc[0:, 1:] / 100000.0
+    return d
+
+def pick_fg_flow(sel):
+    return master_prod_flow_df if sel == "All" else all_prod_dfs[products.index(sel)].reset_index(drop=True)
+
+def pick_rm(sel, df_all, by_p):
+    if sel == "All": return df_all
+    d = {rm: by_p[sel][rm] for rm in used_rms[sel]} or {"-": [0.0] * 17}
+    return compile_report(d, "Raw Material")
+
+def pick_rm_flow(sel, df_all, op_p, pur_p, con_p, cl_p, metric_col):
+    if sel == "All": return df_all
+    blocks = []
+    for rm in used_rms[sel]:
+        blk = pd.DataFrame({"Raw Material": [rm, "", "", ""], metric_col: ["Op stk", "Generated / Purchased", "Consumption", "Cl stk"]})
+        for idx, col in enumerate(display_columns): blk[col] = [op_p[sel][rm][idx], pur_p[sel][rm][idx], con_p[sel][rm][idx], cl_p[sel][rm][idx]]
+        blocks.append(blk)
+    return pd.concat(blocks, ignore_index=True) if blocks else df_all.iloc[0:0]
+
+def pick_scrap(sel):
+    if sel == "All": return df_scrap_final
+    return compile_report({f"Scrap {sel} (S{sel})": fg_scrap_matrix[sel]}, "Scrap (Qt)")
+
+def ratio_table(num, den, mult):
+    rows = []
+    for p in num:
+        r = {"Product": p}
+        for i, c in enumerate(display_columns): r[c] = (num[p][i] / den[p][i] * mult) if den[p][i] > 0 else 0.0
+        rows.append(r)
+    t = {"Product": "Total"}
+    for i, c in enumerate(display_columns):
+        sn, sd = sum(num[p][i] for p in num), sum(den[p][i] for p in num)
+        t[c] = (sn / sd * mult) if sd > 0 else 0.0
+    return pd.DataFrame(rows + [t])
+
+def dx_tables(cost_by_p, sel):
+    ps = products if sel == "All" else [sel]
+    cost = {p: cost_by_p[p] for p in ps}
+    df_cost = compile_report(cost, "Product")
+    df_pu = ratio_table({p: cost[p] for p in ps}, {p: fg_prod_matrix[p] for p in ps}, 100000.0)   # Rs lacs -> Rs per Kg
+    df_pct = ratio_table({p: cost[p] for p in ps}, {p: rev_lacs_p[p] for p in ps}, 100.0)         # % of revenue
+    return df_cost, df_pu, df_pct
 # -----------------------------------------------------------------------------
 # CHAPTER 5: TOP PANEL NAVIGATION ROUTER & WORKSPACE VIEWPORTS
 # -----------------------------------------------------------------------------
-page_tab1, page_tab2, page_tab3, page_tab4, page_tab5 = st.tabs(["Revenue", "FG", "RM Qt", "RM Val", "PL"])
+page_tab1, page_tab2, page_tab3, page_tab4, page_tab_dx, page_tab5 = st.tabs(["Revenue", "FG", "RM Qt", "RM Val", "Direct Expenses", "PL"])
 
 # (Streamlit tabs are client-side only, so the sidebar radio is synced by the script in CHAPTER 7.)
 
 with page_tab1:
-    st.title("Sales Forecasting")
+    sel1 = title_with_slicer("Sales Forecasting", "slicer_rev")
     st.subheader("1. Revenue (Rs in Lacs)")
-    st.dataframe(df_rev_final.style.format({col: "{:,.2f} L" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
+    st.dataframe(pick_rev(sel1).style.format({col: "{:,.2f} L" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
     st.subheader("2. Sale (Qt)")
-    st.dataframe(df_qty_final.style.format({col: "{:,.0f}" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
+    st.dataframe(pick_matrix(df_qty_final, qty_matrix, sel1).style.format({col: "{:,.0f}" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
 
 with page_tab2:
-    st.title("Production Forecasting")
+    sel2 = title_with_slicer("Production Forecasting", "slicer_fg")
     st.subheader("1. FG Flow (Qt)")
-    st.dataframe(master_prod_flow_df.style.format({col: "{:,.0f}" for col in display_columns if col not in ["Product", "FG Inventory Metrics"]}), use_container_width=True, hide_index=True)
+    st.dataframe(pick_fg_flow(sel2).style.format({col: "{:,.0f}" for col in display_columns if col not in ["Product", "FG Inventory Metrics"]}), use_container_width=True, hide_index=True)
     st.subheader("2. Production (Qt)")
-    st.dataframe(df_summary_prod.style.format({col: "{:,.0f}" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
+    st.dataframe(pick_matrix(df_summary_prod, fg_prod_matrix, sel2).style.format({col: "{:,.0f}" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
     st.subheader("3. FG Closing Stock (Qt)")
-    st.dataframe(df_summary_cl.style.format({col: "{:,.0f}" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
+    st.dataframe(pick_matrix(df_summary_cl, fg_cl_matrix, sel2).style.format({col: "{:,.0f}" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
     st.subheader("4. FG Opening Stock (Qt)")
-    st.dataframe(df_summary_op.style.format({col: "{:,.0f}" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
+    st.dataframe(pick_matrix(df_summary_op, fg_op_matrix, sel2).style.format({col: "{:,.0f}" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
 
 with page_tab3:
-    st.title("Material Forecasting")
+    sel3 = title_with_slicer("Material Forecasting", "slicer_rmqt")
     st.subheader("1. RM Flow (Qt)")
-    st.dataframe(master_rm_flow_df.style.format({col: "{:,.0f}" for col in display_columns if col not in ["Raw Material", "RM Flow(Qt) Metrics"]}), use_container_width=True, hide_index=True)
+    st.dataframe(pick_rm_flow(sel3, master_rm_flow_df, rm_op_p, rm_purch_p, rm_cons_p, rm_cl_p, "RM Flow(Qt) Metrics").style.format({col: "{:,.0f}" for col in display_columns if col not in ["Raw Material", "RM Flow(Qt) Metrics"]}), use_container_width=True, hide_index=True)
     st.subheader("2. RM Consumption (Qt)")
-    st.dataframe(df_rm_consumption_final.style.format({col: "{:,.0f}" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
+    st.dataframe(pick_rm(sel3, df_rm_consumption_final, rm_cons_p).style.format({col: "{:,.0f}" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
     st.subheader("3. RM Purchase (Qt)")
-    st.dataframe(df_rm_purchase_final.style.format({col: "{:,.0f}" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
+    st.dataframe(pick_rm(sel3, df_rm_purchase_final, rm_purch_p).style.format({col: "{:,.0f}" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
     st.subheader("4. RM Loss (Qt)")
-    st.dataframe(df_rm_loss_final.style.format({col: "{:,.0f}" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
+    st.dataframe(pick_rm(sel3, df_rm_loss_final, rm_loss_p).style.format({col: "{:,.0f}" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
     st.subheader("5. Scrap (Qt)")
-    st.dataframe(df_scrap_final.style.format({col: "{:,.0f}" for col in display_columns if col != "Scrap (Qt)"}), use_container_width=True, hide_index=True)
+    st.dataframe(pick_scrap(sel3).style.format({col: "{:,.0f}" for col in display_columns if col != "Scrap (Qt)"}), use_container_width=True, hide_index=True)
 
 with page_tab4:
-    st.title("Material Forecasting")
+    sel4 = title_with_slicer("Material Forecasting", "slicer_rmval")
     st.subheader("1. RM Flow (Rs in Lacs)")
-    st.dataframe(master_rm_val_flow_df.style.format({col: "{:,.2f} L" for col in display_columns if col not in ["Raw Material", "RM Flow(Rs) Metrics"]}), use_container_width=True, hide_index=True)
+    st.dataframe(pick_rm_flow(sel4, master_rm_val_flow_df, rm_op_val_p, rm_purch_val_p, rm_cons_val_p, rm_cl_val_p, "RM Flow(Rs) Metrics").style.format({col: "{:,.2f} L" for col in display_columns if col not in ["Raw Material", "RM Flow(Rs) Metrics"]}), use_container_width=True, hide_index=True)
     st.subheader("2. RM Purchase (Rs in Lacs)")
-    st.dataframe(df_rm_purchase_val_final.style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
+    st.dataframe(pick_rm(sel4, df_rm_purchase_val_final, rm_purch_val_p).style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
     st.subheader("3. RM Consumption (Rs in Lacs)")
-    st.dataframe(df_rm_consumption_val_final.style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
+    st.dataframe(pick_rm(sel4, df_rm_consumption_val_final, rm_cons_val_p).style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
     st.subheader("4. RM Loss (Rs in Lacs)")
-    st.dataframe(df_rm_loss_val_final.style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
+    st.dataframe(pick_rm(sel4, df_rm_loss_val_final, rm_loss_p).style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
     st.subheader("5. RM Opening Stock (Rs in Lacs)")
-    st.dataframe(df_rm_op_val_final.style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
+    st.dataframe(pick_rm(sel4, df_rm_op_val_final, rm_op_val_p).style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
     st.subheader("6. RM Closing Stock (Rs in Lacs)")
-    st.dataframe(df_rm_cl_val_final.style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
+    st.dataframe(pick_rm(sel4, df_rm_cl_val_final, rm_cl_val_p).style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
+
+with page_tab_dx:
+    sel_dx = title_with_slicer("Direct Expenses Forecast", "slicer_dx")
+    fmt_l = {c: "{:,.2f} L" for c in display_columns}
+    fmt_n = {c: "{:,.2f}" for c in display_columns}
+    fmt_p = {c: "{:,.2f}%" for c in display_columns}
+    dx_blocks = [(h, dx_short[h], dx_cost[h]) for h in direct_heads]
+    dx_blocks.append(("Total Direct Expenses", "Total Exp", dx_total_cost))
+    for h, short, cost_by_p in dx_blocks:
+        d_cost, d_pu, d_pct = dx_tables(cost_by_p, sel_dx)
+        st.subheader(f"{h} : Forecast (Rs in Lacs)")
+        st.dataframe(d_cost.style.format(fmt_l), use_container_width=True, hide_index=True)
+        st.markdown(f"##### {short} / p.u. (Rs/Kg)")
+        st.dataframe(d_pu.style.format(fmt_n), use_container_width=True, hide_index=True)
+        st.markdown(f"##### {short} Turnover %")
+        st.dataframe(d_pct.style.format(fmt_p), use_container_width=True, hide_index=True)
+        st.markdown("---")
 
 with page_tab5:
     st.title("PL Forecast")
@@ -507,6 +708,7 @@ with page_tab5:
             for col in display_columns:
                 val = safe_float(row[col])
                 if is_pct: formatted_row[col] = f"{val:.2f}%"
+                elif int(df_pl_filtered.loc[row.name, "BlockID"]) >= 6: formatted_row[col] = f"{val:,.2f} L"
                 elif "Sale" in str(row["Level 1"]) or "Production" in str(row["Level 1"]) or (row["Level 2"] != "" and row["Level 1"] == "" and "RM" not in str(row["Level 2"]) and "Stock" not in str(row["Level 2"])):
                     formatted_row[col] = f"{val:,.0f}"
                 else: formatted_row[col] = f"{val:,.2f} L"
@@ -545,6 +747,13 @@ with pd.ExcelWriter(output_buffer, engine="openpyxl") as writer:
     df_rm_consumption_final.to_excel(writer, sheet_name="RM Consumption Vol", index=False)
     df_scrap_final.to_excel(writer, sheet_name="Visible Scrap Report", index=False)
     df_pl_master_raw.to_excel(writer, sheet_name="Master Financial P&L Statement", index=False)
+    _dx_sheets = {"Direct Exp (Rs Lacs)": [], "Direct Exp (Rs per Kg)": [], "Direct Exp (% Turnover)": []}
+    for _h, _cost_by_p in [(h, dx_cost[h]) for h in direct_heads] + [("Total Direct Expenses", dx_total_cost)]:
+        for _name, _df in zip(_dx_sheets, dx_tables(_cost_by_p, "All")):
+            _df.insert(0, "Expense Head", _h)
+            _dx_sheets[_name].append(_df)
+    for _name, _dfs in _dx_sheets.items():
+        pd.concat(_dfs, ignore_index=True).to_excel(writer, sheet_name=_name, index=False)
 
 st.download_button(
     label="📥 Download Updated Comprehensive Interconnected Workbook",
@@ -564,7 +773,7 @@ components.html(r"""
 (function () {
     const P = window.parent, doc = P.document;
     const MAP = {"Revenue": "Sales / FG Feed", "FG": "Sales / FG Feed",
-                 "RM Qt": "RM Qt Feed", "RM Val": "RM Val Feed", "PL": "RM Val Feed"};
+                 "RM Qt": "RM Qt Feed", "RM Val": "RM Val Feed", "Direct Expenses": "Direct Expenses Feed", "PL": "RM Val Feed"};
     const norm = s => (s || "").replace(/\s+/g, " ").trim();
     if (P.__tabRadioSyncHandler) doc.removeEventListener("click", P.__tabRadioSyncHandler, true);
     P.__tabRadioSyncHandler = function (e) {
