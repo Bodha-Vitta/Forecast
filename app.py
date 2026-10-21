@@ -11,21 +11,51 @@ st.set_page_config(page_title="Corporate Forecast Cockpit", layout="wide")
 # Enhanced CSS overrides forcing the navigation container to lock at the absolute top boundary
 st.markdown("""
     <style>
-    header[data-testid="stHeader"] {
-        z-index: 99 !important;
-    }
+    /* ===== Deep Prussian Blue + Gold theme, compact layout ===== */
+    .stApp { background: #F6F4EC; }
+    header[data-testid="stHeader"] { z-index: 99 !important; background: transparent !important; height: 2rem !important; min-height: 2rem !important; }
+    .block-container { padding-top: 2.4rem !important; padding-bottom: 1rem !important; padding-left: 1.5rem !important; padding-right: 1.5rem !important; max-width: 100% !important; }
+    div[data-testid="stVerticalBlock"] { gap: 0.5rem !important; }
+    hr { border-color: #D4AF37 !important; margin: 0.5rem 0 !important; }
+
+    /* Navigation tabs */
     div[data-testid="stTabs"] {
-        position: sticky !important;
-        top: 0px !important;
-        background-color: white !important;
-        z-index: 9999 !important;
-        padding-top: 10px !important;
-        padding-bottom: 10px !important;
-        border-bottom: 3px solid #f0f2f6 !important;
+        position: sticky !important; top: 0px !important; background-color: #F6F4EC !important;
+        z-index: 9999 !important; padding-top: 4px !important; padding-bottom: 4px !important;
     }
     div[data-testid="stTabs"] [data-baseweb="tab-list"] {
-        background-color: white !important;
+        background: linear-gradient(90deg, #00294A, #0B3D6B) !important; border-radius: 8px !important;
+        padding: 4px 8px !important; gap: 6px !important; border-bottom: 3px solid #D4AF37 !important;
     }
+    div[data-testid="stTabs"] button[role="tab"] { background: transparent !important; border-radius: 6px !important; }
+    div[data-testid="stTabs"] button[role="tab"] p { color: #F1DE9C !important; font-weight: 600 !important; }
+    div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] { background: #D4AF37 !important; }
+    div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] p { color: #00294A !important; }
+    div[data-testid="stTabs"] [data-baseweb="tab-highlight"] { background-color: #FFFFFF !important; height: 3px !important; }
+    div[data-testid="stTabs"] [data-baseweb="tab-border"] { background-color: transparent !important; }
+
+    /* Headings */
+    .stApp h1 { color: #00294A !important; font-size: 1.8rem !important; padding: 0 0 0.1rem 0 !important; margin: 0 !important; border-bottom: 3px solid #D4AF37; display: inline-block; }
+    .stApp h2, .stApp h3 { color: #00294A !important; font-size: 1.2rem !important; padding: 0 0 0 0.6rem !important; margin: 0.2rem 0 0 0 !important; border-left: 5px solid #D4AF37; }
+    .stApp h5 { color: #0B3D6B !important; margin: 0 !important; padding: 0 !important; }
+    div[data-testid="stCaptionContainer"] p { color: #0B3D6B !important; }
+
+    /* Slicer + download button */
+    div[data-baseweb="select"] > div { border: 1.5px solid #D4AF37 !important; background: #FFFDF5 !important; }
+    div[data-testid="stDownloadButton"] button { background: #00294A !important; border: 2px solid #D4AF37 !important; }
+    div[data-testid="stDownloadButton"] button p { color: #F1DE9C !important; font-weight: 600 !important; }
+    div[data-testid="stDownloadButton"] button:hover { background: #D4AF37 !important; }
+    div[data-testid="stDownloadButton"] button:hover p { color: #00294A !important; }
+
+    /* Tables */
+    div[data-testid="stDataFrame"] { border: 1.5px solid #D4AF37; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,41,74,0.18); }
+
+    /* Sidebar cockpit */
+    section[data-testid="stSidebar"] { background: linear-gradient(180deg, #00294A, #001B33) !important; border-right: 2px solid #D4AF37; }
+    section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] { padding-top: 1rem !important; }
+    section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2, section[data-testid="stSidebar"] h3 { color: #D4AF37 !important; border-left: none !important; padding-left: 0 !important; }
+    section[data-testid="stSidebar"] label p, section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p { color: #F1DE9C !important; }
+    section[data-testid="stSidebar"] hr { border-color: #D4AF37 !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -484,15 +514,12 @@ for rm in raw_materials:
     rm_pct_series = [(rm_cons_val_matrix[rm][i] / total_rev_lacs[i] * 100.0 if total_rev_lacs[i] > 0 else 0.0) for i in range(17)]
     append_pl_row("", "5", "L2", "", rm, "", rm_pct_series, format_as_pct=True)
 
-# ---- Rows 6-10: Direct Expense heads (L1 total, L2 product-wise) ----
-for n, h in enumerate(direct_heads):
-    sn = str(6 + n)
-    append_pl_row(sn, sn, "L1", h, "", "", [sum(dx_cost[h][p][i] for p in products) for i in range(17)])
-    for p in products: append_pl_row("", sn, "L2", "", p, "", dx_cost[h][p])
-
+# ---- Row 6: Direct Expenses (L1 total -> L2 expense heads -> L3 products) ----
 total_dx_lacs = [sum(dx_total_cost[p][i] for p in products) for i in range(17)]
-append_pl_row("11", "11", "L1", "Total Direct Exp (6+7+8+9+10)", "", "", total_dx_lacs)
-for p in products: append_pl_row("", "11", "L2", "", p, "", dx_total_cost[p])
+append_pl_row("6", "6", "L1", "Direct Expenses", "", "", total_dx_lacs)
+for h in direct_heads:
+    append_pl_row("", "6", "L2", "", h, "", [sum(dx_cost[h][p][i] for p in products) for i in range(17)])
+    for p in products: append_pl_row("", "6", "L3", "", "", p, dx_cost[h][p])
 
 rev_lacs_p = {p: [v / 100000.0 for v in rev_matrix[p]] for p in products}
 cogs_p = {p: [rm_cons_val_p_total[p][i] + dx_total_cost[p][i] for i in range(17)] for p in products}
@@ -501,14 +528,14 @@ gp_p = {p: [rev_lacs_p[p][i] - cogs_p[p][i] for i in range(17)] for p in product
 gp_tot = [r - c for r, c in zip(total_rev_lacs, cogs_tot)]
 pct_of = lambda n, d: [(a / b * 100.0 if b > 0 else 0.0) for a, b in zip(n, d)]
 
-append_pl_row("12", "12", "L1", "COGS (4+11)", "", "", cogs_tot)
-for p in products: append_pl_row("", "12", "L2", "", p, "", cogs_p[p])
-append_pl_row("13", "13", "L1", "COGS % (12/3)", "", "", pct_of(cogs_tot, total_rev_lacs), format_as_pct=True)
-for p in products: append_pl_row("", "13", "L2", "", p, "", pct_of(cogs_p[p], rev_lacs_p[p]), format_as_pct=True)
-append_pl_row("14", "14", "L1", "Gross Profit (3-12)", "", "", gp_tot)
-for p in products: append_pl_row("", "14", "L2", "", p, "", gp_p[p])
-append_pl_row("15", "15", "L1", "Gross Profit % (14/3)", "", "", pct_of(gp_tot, total_rev_lacs), format_as_pct=True)
-for p in products: append_pl_row("", "15", "L2", "", p, "", pct_of(gp_p[p], rev_lacs_p[p]), format_as_pct=True)
+append_pl_row("7", "7", "L1", "COGS (4+6)", "", "", cogs_tot)
+for p in products: append_pl_row("", "7", "L2", "", p, "", cogs_p[p])
+append_pl_row("8", "8", "L1", "COGS % (7/3)", "", "", pct_of(cogs_tot, total_rev_lacs), format_as_pct=True)
+for p in products: append_pl_row("", "8", "L2", "", p, "", pct_of(cogs_p[p], rev_lacs_p[p]), format_as_pct=True)
+append_pl_row("9", "9", "L1", "Gross Profit (3-7)", "", "", gp_tot)
+for p in products: append_pl_row("", "9", "L2", "", p, "", gp_p[p])
+append_pl_row("10", "10", "L1", "Gross Profit % (9/3)", "", "", pct_of(gp_tot, total_rev_lacs), format_as_pct=True)
+for p in products: append_pl_row("", "10", "L2", "", p, "", pct_of(gp_p[p], rev_lacs_p[p]), format_as_pct=True)
 
 df_pl_master_raw = pd.DataFrame(pl_rows)
 
@@ -538,12 +565,14 @@ def build_pl_product(p):
     add("", "4", "L2", "", "Less : Closing Stock", "", [sum(rm_cl_val_p[p][rm][i] for rm in rms) for i in range(17)])
     add("5", "5", "L1", "RM Consumption (%) (4/3)", "", "", pct_of(rm_cons_val_p_total[p], rev_lacs_p[p]), True)
     for rm in rms: add("", "5", "L2", "", rm, "", pct_of(rm_cons_val_p[p][rm], rev_lacs_p[p]), True)
-    for n, h in enumerate(direct_heads): head(str(6 + n), h, dx_cost[h][p])
-    head("11", "Total Direct Exp (6+7+8+9+10)", dx_total_cost[p])
-    head("12", "COGS (4+11)", cogs_p[p])
-    head("13", "COGS % (12/3)", pct_of(cogs_p[p], rev_lacs_p[p]), True)
-    head("14", "Gross Profit (3-12)", gp_p[p])
-    head("15", "Gross Profit % (14/3)", pct_of(gp_p[p], rev_lacs_p[p]), True)
+    add("6", "6", "L1", "Direct Expenses", "", "", dx_total_cost[p])
+    for h in direct_heads:
+        add("", "6", "L2", "", h, "", dx_cost[h][p])
+        add("", "6", "L3", "", "", p, dx_cost[h][p])
+    head("7", "COGS (4+6)", cogs_p[p])
+    head("8", "COGS % (7/3)", pct_of(cogs_p[p], rev_lacs_p[p]), True)
+    head("9", "Gross Profit (3-7)", gp_p[p])
+    head("10", "Gross Profit % (9/3)", pct_of(gp_p[p], rev_lacs_p[p]), True)
     return pd.DataFrame(rows)
 df_pl_by_prod = {p: build_pl_product(p) for p in products}
 
@@ -551,9 +580,9 @@ df_pl_by_prod = {p: build_pl_product(p) for p in products}
 # CHAPTER 4B (NEW): PRODUCT SLICER HELPERS (view-only filters; "All" returns the original tables)
 # -----------------------------------------------------------------------------
 def title_with_slicer(title, key):
-    c_title, c_slicer = st.columns([5, 1])
+    c_title, c_slicer = st.columns([6, 1.3], vertical_alignment="center")
     with c_title: st.title(title)
-    with c_slicer: return st.selectbox("Product", ["All", "P1", "P2", "P3"], key=key)
+    with c_slicer: return st.selectbox("Product", ["All", "P1", "P2", "P3"], key=key, label_visibility="collapsed", format_func=lambda x: f"Product : {x}")
 
 def pick_matrix(df_all, matrix, sel, key="Product"):
     return df_all if sel == "All" else compile_report({sel: matrix[sel]}, key)
@@ -607,7 +636,7 @@ def dx_tables(cost_by_p, sel):
 # -----------------------------------------------------------------------------
 # CHAPTER 5: TOP PANEL NAVIGATION ROUTER & WORKSPACE VIEWPORTS
 # -----------------------------------------------------------------------------
-page_tab1, page_tab2, page_tab3, page_tab4, page_tab_dx, page_tab5 = st.tabs(["Revenue", "FG", "RM Qt", "RM Val", "Direct Expenses", "PL"])
+page_tab5, page_tab1, page_tab2, page_tab3, page_tab4, page_tab_dx = st.tabs(["PL", "Revenue", "FG", "RM Qt", "RM Val", "Direct Expenses"])
 
 # (Streamlit tabs are client-side only, so the sidebar radio is synced by the script in CHAPTER 7.)
 
@@ -762,6 +791,7 @@ with page_tab5:
             num_rows="fixed",
             disabled=[c for c in styled_pl_df.columns if c != "+/-"],
             column_config={"+/-": st.column_config.CheckboxColumn("+/-", help="Tick to expand, untick to collapse", width="small")},
+            height=min(35 * (len(styled_pl_df) + 1) + 5, 1100),
             key=f"pl_tree_editor_{st.session_state.pl_editor_ver}",
             on_change=pl_tree_toggle_cb,
         )
@@ -772,30 +802,42 @@ with page_tab5:
 # CHAPTER 6: GLOBAL EXCEL PIPELINE COMPILER DOWNSTREAM EXPORTER
 # -----------------------------------------------------------------------------
 st.markdown("---")
-output_buffer = BytesIO()
-with pd.ExcelWriter(output_buffer, engine="openpyxl") as writer:
-    df_rev_final.to_excel(writer, sheet_name="Revenue (Lacs)", index=False)
-    df_qty_final.to_excel(writer, sheet_name="Quantity Volumes", index=False)
-    master_prod_flow_df.to_excel(writer, sheet_name="FG Flow Ledger", index=False)
-    df_summary_prod.to_excel(writer, sheet_name="Summary Production", index=False)
-    master_rm_flow_df.to_excel(writer, sheet_name="RM Flow Ledger", index=False)
-    df_rm_consumption_final.to_excel(writer, sheet_name="RM Consumption Vol", index=False)
-    df_scrap_final.to_excel(writer, sheet_name="Visible Scrap Report", index=False)
-    df_pl_master_raw.to_excel(writer, sheet_name="Master Financial P&L Statement", index=False)
-    _dx_sheets = {"Direct Exp (Rs Lacs)": [], "Direct Exp (Rs per Kg)": [], "Direct Exp (% Turnover)": []}
-    for _h, _cost_by_p in [(h, dx_cost[h]) for h in direct_heads] + [("Total Direct Expenses", dx_total_cost)]:
-        for _name, _df in zip(_dx_sheets, dx_tables(_cost_by_p, "All")):
-            _df.insert(0, "Expense Head", _h)
-            _dx_sheets[_name].append(_df)
-    for _name, _dfs in _dx_sheets.items():
-        pd.concat(_dfs, ignore_index=True).to_excel(writer, sheet_name=_name, index=False)
+_xl_engine = None
+for _cand in ("openpyxl", "xlsxwriter"):
+    try:
+        __import__(_cand)
+        _xl_engine = _cand
+        break
+    except ImportError:
+        pass
+if _xl_engine is None:
+    st.info("Excel download is switched off because the 'openpyxl' library is missing. "
+            "Add a line 'openpyxl' to requirements.txt and reboot the app.")
+else:
+    output_buffer = BytesIO()
+    with pd.ExcelWriter(output_buffer, engine=_xl_engine) as writer:
+        df_rev_final.to_excel(writer, sheet_name="Revenue (Lacs)", index=False)
+        df_qty_final.to_excel(writer, sheet_name="Quantity Volumes", index=False)
+        master_prod_flow_df.to_excel(writer, sheet_name="FG Flow Ledger", index=False)
+        df_summary_prod.to_excel(writer, sheet_name="Summary Production", index=False)
+        master_rm_flow_df.to_excel(writer, sheet_name="RM Flow Ledger", index=False)
+        df_rm_consumption_final.to_excel(writer, sheet_name="RM Consumption Vol", index=False)
+        df_scrap_final.to_excel(writer, sheet_name="Visible Scrap Report", index=False)
+        df_pl_master_raw.to_excel(writer, sheet_name="Master Financial P&L Statement", index=False)
+        _dx_sheets = {"Direct Exp (Rs Lacs)": [], "Direct Exp (Rs per Kg)": [], "Direct Exp (% Turnover)": []}
+        for _h, _cost_by_p in [(h, dx_cost[h]) for h in direct_heads] + [("Total Direct Expenses", dx_total_cost)]:
+            for _name, _df in zip(_dx_sheets, dx_tables(_cost_by_p, "All")):
+                _df.insert(0, "Expense Head", _h)
+                _dx_sheets[_name].append(_df)
+        for _name, _dfs in _dx_sheets.items():
+            pd.concat(_dfs, ignore_index=True).to_excel(writer, sheet_name=_name, index=False)
 
-st.download_button(
-    label="📥 Download Updated Comprehensive Interconnected Workbook",
-    data=output_buffer.getvalue(),
-    file_name="Sales_Production_And_PL_Valuation_Forecasting_Report.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-)
+    st.download_button(
+        label="📥 Download Updated Comprehensive Interconnected Workbook",
+        data=output_buffer.getvalue(),
+        file_name="Sales_Production_And_PL_Valuation_Forecasting_Report.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
 # -----------------------------------------------------------------------------
 # CHAPTER 7: AUTO-SYNC SIDEBAR FEED RADIO WITH THE TOP TAB THE USER CLICKS
