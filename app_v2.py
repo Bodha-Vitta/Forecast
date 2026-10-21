@@ -18,27 +18,28 @@ st.markdown("""
     div[data-testid="stVerticalBlock"] { gap: 0.5rem !important; }
     hr { border-color: #D4AF37 !important; margin: 0.5rem 0 !important; }
 
-    /* Navigation tabs: royal-blue bar with gold edge (clearly different from the dark-navy cockpit); selected page = red */
+    /* Navigation tabs: same blue as the cockpit, bright-gold text, accent bar on the left (gold = default, red = selected) */
     div[data-testid="stTabs"] {
         position: sticky !important; top: 0px !important; background-color: #F6F4EC !important;
-        z-index: 9999 !important; padding-top: 4px !important; padding-bottom: 4px !important;
+        z-index: 9999 !important; padding-top: 4px !important; padding-bottom: 6px !important;
     }
-    div[role="tablist"], div[data-baseweb="tab-list"] {
-        background: linear-gradient(90deg, #1558A8, #2E7BD6) !important; border: 2px solid #D4AF37 !important;
-        border-radius: 8px !important; padding: 4px 8px 0 8px !important; gap: 6px !important;
+    .stApp div[role="tablist"], .stApp div[data-baseweb="tab-list"] {
+        background: #00294A !important; border: none !important; border-radius: 8px !important;
+        padding: 6px 10px !important; gap: 10px !important;
     }
-    button[role="tab"] { background: transparent !important; border-radius: 6px 6px 0 0 !important; box-shadow: none !important; }
-    button[role="tab"], button[role="tab"] *, button[role="tab"] p { color: #FFE9A0 !important; font-weight: 700 !important; }
-    button[role="tab"]:hover { background: rgba(255,255,255,0.18) !important; }
-    button[role="tab"][aria-selected="true"] { background: #FFF6D6 !important; box-shadow: inset 0 -4px 0 #D7191C !important; }
-    button[role="tab"][aria-selected="true"], button[role="tab"][aria-selected="true"] *, button[role="tab"][aria-selected="true"] p { color: #C8102E !important; }
+    .stApp button[role="tab"] { background: transparent !important; border-radius: 4px !important; border-left: 4px solid #D4AF37 !important; box-shadow: none !important; padding: 6px 14px !important; }
+    .stApp button[role="tab"], .stApp button[role="tab"] *, .stApp button[role="tab"] p { color: #FFD24C !important; font-weight: 700 !important; }
+    .stApp button[role="tab"]:hover { background: rgba(255,210,76,0.12) !important; }
+    .stApp button[role="tab"][aria-selected="true"] { background: #0B3D6B !important; border-left: 4px solid #E53935 !important; box-shadow: inset 0 -3px 0 #E53935 !important; }
+    .stApp button[role="tab"][aria-selected="true"], .stApp button[role="tab"][aria-selected="true"] *, .stApp button[role="tab"][aria-selected="true"] p { color: #FF5252 !important; }
     div[data-baseweb="tab-highlight"] { display: none !important; }
     div[data-baseweb="tab-border"] { background-color: transparent !important; }
 
-    /* Headings */
+    /* Headings (explicit line-height + bottom space so a heading never sits under the table below it) */
     .stApp h1 { color: #00294A !important; font-size: 1.8rem !important; padding: 0 0 0.1rem 0 !important; margin: 0 !important; border-bottom: 3px solid #D4AF37; display: inline-block; }
-    .stApp h2, .stApp h3 { color: #00294A !important; font-size: 1.2rem !important; padding: 0 0 0 0.6rem !important; margin: 0.2rem 0 0 0 !important; border-left: 5px solid #D4AF37; }
-    .stApp h5 { color: #0B3D6B !important; margin: 0 !important; padding: 0 !important; }
+    .stApp h2, .stApp h3 { color: #00294A !important; font-size: 1.2rem !important; line-height: 1.6 !important; padding: 0.1rem 0 0.45rem 0.6rem !important; margin: 0.5rem 0 0.5rem 0 !important; border-left: 5px solid #D4AF37; overflow: visible !important; }
+    .stApp h5 { color: #0B3D6B !important; line-height: 1.6 !important; margin: 0.4rem 0 0.4rem 0 !important; padding: 0.1rem 0 0.4rem 0 !important; overflow: visible !important; }
+    div[data-testid="stHeading"], div[data-testid="stHeadingWithActionElements"] { height: auto !important; overflow: visible !important; margin-bottom: 0.3rem !important; }
     div[data-testid="stCaptionContainer"] p { color: #0B3D6B !important; }
 
     /* Slicer + download button */
@@ -49,16 +50,23 @@ st.markdown("""
     div[data-testid="stDownloadButton"] button:hover p { color: #00294A !important; }
 
     /* Tables */
-    div[data-testid="stDataFrame"] { border: 1.5px solid #D4AF37; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,41,74,0.18); }
+    div[data-testid="stDataFrame"] { border: 1.5px solid #D4AF37; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,41,74,0.18); margin-top: 0.35rem; }
 
     /* Sidebar cockpit */
     section[data-testid="stSidebar"] { background: linear-gradient(180deg, #00294A, #001B33) !important; border-right: 2px solid #D4AF37; }
-    section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] { padding-top: 1rem !important; }
+    section[data-testid="stSidebar"] [data-testid="stSidebarHeader"] { height: 2.2rem !important; min-height: 0 !important; padding-top: 0.4rem !important; margin-bottom: 0 !important; }
+    section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] { padding-top: 0.2rem !important; }
     section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2, section[data-testid="stSidebar"] h3 { color: #D4AF37 !important; border-left: none !important; padding-left: 0 !important; }
     section[data-testid="stSidebar"] label p, section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p { color: #F1DE9C !important; }
     section[data-testid="stSidebar"] hr { border-color: #D4AF37 !important; }
-    /* feed-box headings */
-    section[data-testid="stSidebar"] h5 { color: #D4AF37 !important; font-size: 0.95rem !important; margin: 0.7rem 0 0.1rem 0 !important; padding: 0 !important; }
+    section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] { align-items: center !important; }
+    section[data-testid="stSidebar"] div[data-testid="stCaptionContainer"] { margin: 0.3rem 0 0.5rem 0 !important; }
+    /* heading card above every feed box */
+    .feed-title { color: #FFD24C; font-weight: 700; font-size: 0.9rem; line-height: 1.4; background: rgba(212,175,55,0.16); border-left: 5px solid #D4AF37; border-radius: 6px; padding: 6px 10px; margin: 1.1rem 0 0.7rem 0; }
+    /* feed boxes: gold frame + glow so they read as boxes to key into */
+    section[data-testid="stSidebar"] div[data-testid="stDataFrame"] { border: 2px solid #D4AF37 !important; border-radius: 10px !important; box-shadow: 0 0 0 3px rgba(212,175,55,0.35), 0 6px 14px rgba(0,0,0,0.45) !important; margin: 0.5rem 0.4rem 1.1rem 0.2rem !important; }
+    section[data-testid="stSidebar"] div[data-testid="stNumberInput"] div[data-baseweb="input"] { background: #FFF6D6 !important; border: 2px solid #D4AF37 !important; border-radius: 8px !important; }
+    section[data-testid="stSidebar"] div[data-testid="stNumberInput"] input { color: #00294A !important; font-weight: 700 !important; background: transparent !important; }
     /* cockpit spread / squeeze arrow button */
     section[data-testid="stSidebar"] div[data-testid="stButton"] { display: flex; justify-content: flex-end; }
     section[data-testid="stSidebar"] div[data-testid="stButton"] button { background: #D4AF37 !important; border: 2px solid #F1DE9C !important; min-height: 2rem !important; padding: 0 0.9rem !important; }
@@ -182,7 +190,7 @@ ix_type = {"Employment Cost": "%", "Selling & Distribution": "p.u", "Travelling 
 ix_short = {"Employment Cost": "Employment", "Selling & Distribution": "S&D", "Travelling Expenses": "Travelling",
             "Carriage Outward": "Carriage Out", "Rent": "Rent", "Insurance": "Insurance",
             "Warehouse Exp": "Warehouse", "Other Admin charges": "Other Admin"}
-IX_RATE_COL = "Rate (Rs/Kg sold or % of Sale)"
+IX_RATE_COL = "Rate (Rs/Kg or %)"
 
 # One rate / % for all products: p.u. heads = Rs per Kg sold, % heads = % of sale value
 if "sidebar_ix_df" not in st.session_state:
@@ -214,26 +222,52 @@ if st.session_state.cockpit_wide:
     <style>
     section[data-testid="stSidebar"]:not([aria-expanded="false"]) { width: min(78vw, 1150px) !important; min-width: min(78vw, 1150px) !important; max-width: min(78vw, 1150px) !important; }
     section[data-testid="stSidebar"]:not([aria-expanded="false"]) > div { width: 100% !important; }
+    section[data-testid="stSidebar"] div[data-testid="stNumberInput"] { max-width: 260px !important; }
     </style>""", unsafe_allow_html=True)
 
+def _col_px(df, c):
+    """Column width in pixels from the longest text in the column (header or cell)."""
+    head = len(str(c)) * 7.2 + 44                       # header text + sort / menu icons
+    cells = max([len(str(v)) for v in df[c].tolist()] + [1]) * 8 + 24
+    return int(min(max(head, cells, 64), 300))
+
 def sb_editor(df, **kw):
-    """Cockpit feed table: when the cockpit is spread the table stretches to the full cockpit width."""
+    """Cockpit feed table. Squeezed: as before. Spread: every column is sized to its data, so the box stays compact."""
     if st.session_state.cockpit_wide:
-        kw["use_container_width"] = True
+        try:
+            cfg = dict(kw.get("column_config") or {})
+            total = 0
+            for c in df.columns:
+                px = _col_px(df, c)
+                base = dict(cfg[c]) if c in cfg else dict(st.column_config.Column(label=str(c)))
+                base["width"] = px
+                cfg[c] = base
+                total += px
+            kw2 = dict(kw, column_config=cfg)
+            try:
+                return st.data_editor(df, width=total + 12, **kw2)
+            except TypeError:
+                return st.data_editor(df, **kw2)
+        except Exception:
+            pass
     return st.data_editor(df, **kw)
 
 def feed_title(text):
     """Heading shown above every feed box so the user knows what to key in."""
-    st.markdown(f"##### ▸ {text}")
+    st.markdown(f'<div class="feed-title">▸ {text}</div>', unsafe_allow_html=True)
 
 with st.sidebar:
-    st.button("❮  Squeeze" if st.session_state.cockpit_wide else "Spread  ❯", on_click=_toggle_cockpit,
-              help="Click to squeeze the cockpit back" if st.session_state.cockpit_wide else "Click to spread the cockpit so the feed tables are fully visible")
-    st.header("⚙️ Workspace Configuration Cockpit")
+    _h_col, _b_col = st.columns([5, 4])
+    with _h_col:
+        st.header("⚙️ Cockpit Feed")
+    with _b_col:
+        st.button("❮  Squeeze" if st.session_state.cockpit_wide else "Spread  ❯", on_click=_toggle_cockpit,
+                  help="Click to squeeze the cockpit back" if st.session_state.cockpit_wide else "Click to spread the cockpit so the feed tables are fully visible")
     sidebar_context = st.radio(
-        "🎯 Focus Workspace Target Viewport Context:",
+        "Cockpit Feed",
         options=["Sales / FG Feed", "RM Qt Feed", "RM Val Feed", "Direct Expenses Feed", "Indirect Expenses Feed"],
-        key="synchronized_sidebar_context_radio_widget"
+        key="synchronized_sidebar_context_radio_widget",
+        label_visibility="collapsed"
     )
     st.markdown("---")
 
@@ -1046,11 +1080,28 @@ components.html(r"""
             }
             return false;
         };
+        // paint the navigation tabs inline: gold text + gold left bar (default), red text + red bar + red underline (selected)
+        const paintTabs = () => {
+            const S = (el, p, v) => el.style.setProperty(p, v, "important");
+            doc.querySelectorAll('div[data-baseweb="tab-highlight"]').forEach(h => S(h, "display", "none"));
+            doc.querySelectorAll('div[role="tablist"]').forEach(l => { S(l, "background", "#00294A"); S(l, "border", "none"); });
+            doc.querySelectorAll('button[role="tab"]').forEach(b => {
+                const sel = b.getAttribute("aria-selected") === "true";
+                const col = sel ? "#FF5252" : "#FFD24C";
+                S(b, "color", col); S(b, "font-weight", "700");
+                S(b, "background", sel ? "#0B3D6B" : "transparent");
+                S(b, "border-left", "4px solid " + (sel ? "#E53935" : "#D4AF37"));
+                S(b, "box-shadow", sel ? "inset 0 -3px 0 #E53935" : "none");
+                b.querySelectorAll("*").forEach(c => { S(c, "color", col); S(c, "font-weight", "700"); });
+            });
+        };
         if (P.__tabRadioSyncHandler) { doc.removeEventListener("click", P.__tabRadioSyncHandler, true); P.__tabRadioSyncHandler = null; }
         if (P.__tabSyncTimer) P.clearInterval(P.__tabSyncTimer);
+        paintTabs();
         let last = selectedTab();
         // watch which top tab is selected (works for mouse, keyboard and touch) and follow it with the cockpit radio
         P.__tabSyncTimer = P.setInterval(function () {
+            paintTabs();
             const cur = selectedTab();
             if (!cur || cur === last) return;
             const want = MAP[cur];
