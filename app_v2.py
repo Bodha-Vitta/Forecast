@@ -18,7 +18,7 @@ st.markdown("""
     div[data-testid="stVerticalBlock"] { gap: 0.5rem !important; }
     hr { border-color: #D4AF37 !important; margin: 0.5rem 0 !important; }
 
-    /* Navigation tabs: same blue as the cockpit, bright-gold text, accent bar on the left (gold = default, red = selected) */
+    /* Navigation tabs: same blue as the cockpit, bright-gold text + gold left accent bar (default); red text + red left bar (selected). No underline */
     div[data-testid="stTabs"] {
         position: sticky !important; top: 0px !important; background-color: #F6F4EC !important;
         z-index: 9999 !important; padding-top: 4px !important; padding-bottom: 6px !important;
@@ -27,13 +27,12 @@ st.markdown("""
         background: #00294A !important; border: none !important; border-radius: 8px !important;
         padding: 6px 10px !important; gap: 10px !important;
     }
-    .stApp button[role="tab"] { background: transparent !important; border-radius: 4px !important; border-left: 4px solid #D4AF37 !important; box-shadow: none !important; padding: 6px 14px !important; }
-    .stApp button[role="tab"], .stApp button[role="tab"] *, .stApp button[role="tab"] p { color: #FFD24C !important; font-weight: 700 !important; }
-    .stApp button[role="tab"]:hover { background: rgba(255,210,76,0.12) !important; }
-    .stApp button[role="tab"][aria-selected="true"] { background: #0B3D6B !important; border-left: 4px solid #E53935 !important; box-shadow: inset 0 -3px 0 #E53935 !important; }
-    .stApp button[role="tab"][aria-selected="true"], .stApp button[role="tab"][aria-selected="true"] *, .stApp button[role="tab"][aria-selected="true"] p { color: #FF5252 !important; }
-    div[data-baseweb="tab-highlight"] { display: none !important; }
-    div[data-baseweb="tab-border"] { background-color: transparent !important; }
+    .stApp [role="tab"] { background: transparent !important; border-radius: 4px !important; border: none !important; border-left: 4px solid #D4AF37 !important; box-shadow: none !important; padding: 6px 14px !important; }
+    .stApp [role="tab"], .stApp [role="tab"] *, .stApp [role="tab"] p { color: #FFD24C !important; font-weight: 700 !important; }
+    .stApp [role="tab"]:hover { background: rgba(255,210,76,0.12) !important; }
+    .stApp [role="tab"][aria-selected="true"] { background: #0B3D6B !important; border-left: 4px solid #E53935 !important; }
+    .stApp [role="tab"][aria-selected="true"], .stApp [role="tab"][aria-selected="true"] *, .stApp [role="tab"][aria-selected="true"] p { color: #FF5252 !important; }
+    div[data-baseweb="tab-highlight"], div[data-baseweb="tab-border"] { display: none !important; }
 
     /* Headings (explicit line-height + bottom space so a heading never sits under the table below it) */
     .stApp h1 { color: #00294A !important; font-size: 1.8rem !important; padding: 0 0 0.1rem 0 !important; margin: 0 !important; border-bottom: 3px solid #D4AF37; display: inline-block; }
@@ -59,7 +58,7 @@ st.markdown("""
     section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2, section[data-testid="stSidebar"] h3 { color: #D4AF37 !important; border-left: none !important; padding-left: 0 !important; }
     section[data-testid="stSidebar"] label p, section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p { color: #F1DE9C !important; }
     section[data-testid="stSidebar"] hr { border-color: #D4AF37 !important; }
-    section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] { align-items: center !important; }
+    section[data-testid="stSidebar"] h2 { margin-top: 0.9rem !important; }
     section[data-testid="stSidebar"] div[data-testid="stCaptionContainer"] { margin: 0.3rem 0 0.5rem 0 !important; }
     /* heading card above every feed box */
     .feed-title { color: #FFD24C; font-weight: 700; font-size: 0.9rem; line-height: 1.4; background: rgba(212,175,55,0.16); border-left: 5px solid #D4AF37; border-radius: 6px; padding: 6px 10px; margin: 1.1rem 0 0.7rem 0; }
@@ -223,6 +222,7 @@ if st.session_state.cockpit_wide:
     section[data-testid="stSidebar"]:not([aria-expanded="false"]) { width: min(78vw, 1150px) !important; min-width: min(78vw, 1150px) !important; max-width: min(78vw, 1150px) !important; }
     section[data-testid="stSidebar"]:not([aria-expanded="false"]) > div { width: 100% !important; }
     section[data-testid="stSidebar"] div[data-testid="stNumberInput"] { max-width: 260px !important; }
+    section[data-testid="stSidebar"] div[data-testid="stButton"] { justify-content: flex-start !important; }
     </style>""", unsafe_allow_html=True)
 
 def _col_px(df, c):
@@ -232,37 +232,42 @@ def _col_px(df, c):
     return int(min(max(head, cells, 64), 300))
 
 def sb_editor(df, **kw):
-    """Cockpit feed table. Squeezed: as before. Spread: every column is sized to its data, so the box stays compact."""
-    if st.session_state.cockpit_wide:
-        try:
-            cfg = dict(kw.get("column_config") or {})
-            total = 0
-            for c in df.columns:
-                px = _col_px(df, c)
-                base = dict(cfg[c]) if c in cfg else dict(st.column_config.Column(label=str(c)))
+    """Cockpit feed table. Every key-in column gets a red marker in its heading (fixed columns have none).
+    Spread cockpit: each column is also sized to its data, so the box stays compact."""
+    wide = st.session_state.cockpit_wide
+    try:
+        cfg = dict(kw.get("column_config") or {})
+        total = 0
+        for c in df.columns:
+            base = dict(cfg[c]) if c in cfg else dict(st.column_config.Column(label=str(c)))
+            keyin = not base.get("disabled")
+            if keyin:
+                base["label"] = "🔴 " + str(c)
+            if wide:
+                px = _col_px(df, c) + (26 if keyin else 0)
                 base["width"] = px
-                cfg[c] = base
                 total += px
-            kw2 = dict(kw, column_config=cfg)
+            cfg[c] = base
+        kw2 = dict(kw, column_config=cfg)
+        if wide:
             try:
                 return st.data_editor(df, width=total + 12, **kw2)
             except TypeError:
-                return st.data_editor(df, **kw2)
-        except Exception:
-            pass
-    return st.data_editor(df, **kw)
+                pass
+        return st.data_editor(df, **kw2)
+    except Exception:
+        return st.data_editor(df, **kw)
 
 def feed_title(text):
     """Heading shown above every feed box so the user knows what to key in."""
     st.markdown(f'<div class="feed-title">▸ {text}</div>', unsafe_allow_html=True)
 
 with st.sidebar:
-    _h_col, _b_col = st.columns([5, 4])
-    with _h_col:
-        st.header("⚙️ Cockpit Feed")
-    with _b_col:
-        st.button("❮  Squeeze" if st.session_state.cockpit_wide else "Spread  ❯", on_click=_toggle_cockpit,
-                  help="Click to squeeze the cockpit back" if st.session_state.cockpit_wide else "Click to spread the cockpit so the feed tables are fully visible")
+    # top line: Spread (top-right) when squeezed, Squeeze (top-left) when spread; heading sits below it
+    st.button("❮  Squeeze" if st.session_state.cockpit_wide else "Spread  ❯", on_click=_toggle_cockpit,
+              help="Click to squeeze the cockpit back" if st.session_state.cockpit_wide else "Click to spread the cockpit so the feed tables are fully visible")
+    st.header("⚙️ Cockpit Feed")
+    st.caption("🔴 = key-in column  |  heading without 🔴 = fixed, not editable")
     sidebar_context = st.radio(
         "Cockpit Feed",
         options=["Sales / FG Feed", "RM Qt Feed", "RM Val Feed", "Direct Expenses Feed", "Indirect Expenses Feed"],
@@ -1064,7 +1069,7 @@ components.html(r"""
                      "Indirect Expenses": "Indirect Expenses Feed", "PL": "RM Val Feed"};
         const norm = s => (s || "").replace(/\s+/g, " ").trim();
         const selectedTab = () => {
-            const t = doc.querySelector('button[role="tab"][aria-selected="true"]');
+            const t = doc.querySelector('[role="tab"][aria-selected="true"]');
             return t ? norm(t.innerText) : null;
         };
         // click the matching radio option in the cockpit (label first, then the input itself as a fallback)
@@ -1080,18 +1085,24 @@ components.html(r"""
             }
             return false;
         };
-        // paint the navigation tabs inline: gold text + gold left bar (default), red text + red bar + red underline (selected)
+        // paint the navigation tabs inline: gold text + gold left bar (default), red text + red left bar (selected); no underline
         const paintTabs = () => {
             const S = (el, p, v) => el.style.setProperty(p, v, "important");
-            doc.querySelectorAll('div[data-baseweb="tab-highlight"]').forEach(h => S(h, "display", "none"));
-            doc.querySelectorAll('div[role="tablist"]').forEach(l => { S(l, "background", "#00294A"); S(l, "border", "none"); });
-            doc.querySelectorAll('button[role="tab"]').forEach(b => {
+            doc.querySelectorAll('[role="tablist"]').forEach(l => {
+                S(l, "background", "#00294A"); S(l, "border", "none");
+                l.querySelectorAll("*").forEach(e => {      // hide the thin highlight / border bars (anything that is not a tab)
+                    if (e.closest('[role="tab"]') || e.querySelector('[role="tab"]')) return;
+                    if (e.offsetHeight > 0 && e.offsetHeight <= 6) S(e, "display", "none");
+                });
+            });
+            doc.querySelectorAll('[role="tab"]').forEach(b => {
                 const sel = b.getAttribute("aria-selected") === "true";
                 const col = sel ? "#FF5252" : "#FFD24C";
                 S(b, "color", col); S(b, "font-weight", "700");
                 S(b, "background", sel ? "#0B3D6B" : "transparent");
+                S(b, "border", "none");
                 S(b, "border-left", "4px solid " + (sel ? "#E53935" : "#D4AF37"));
-                S(b, "box-shadow", sel ? "inset 0 -3px 0 #E53935" : "none");
+                S(b, "box-shadow", "none");
                 b.querySelectorAll("*").forEach(c => { S(c, "color", col); S(c, "font-weight", "700"); });
             });
         };
