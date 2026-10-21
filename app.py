@@ -512,6 +512,41 @@ for p in products: append_pl_row("", "15", "L2", "", p, "", pct_of(gp_p[p], rev_
 
 df_pl_master_raw = pd.DataFrame(pl_rows)
 
+# ---- Product-wise P&L (used only when a product is picked in the PL slicer; "All" keeps the table above) ----
+def build_pl_product(p):
+    rows = []
+    def add(si, blk, depth, l1, l2, l3, series, pct=False):
+        d = {"Si No": si, "BlockID": blk, "Depth": depth, "Level 1": l1, "Level 2": l2, "Level 3": l3}
+        for i, c in enumerate(display_columns): d[c] = series[i]
+        d["_is_pct"] = pct
+        rows.append(d)
+    def head(si, label, series, pct=False):
+        add(si, si, "L1", label, "", "", series, pct)
+        add("", si, "L2", "", p, "", series, pct)
+    rms = used_rms[p]
+    head("1", "Sale (Qt) :", qty_matrix[p])
+    head("2", "Production (Qt) :", fg_prod_matrix[p])
+    head("3", "Revenue (Rs) :", rev_lacs_p[p])
+    add("4", "4", "L1", "RM Consumption (Rs) :", "", "", rm_cons_val_p_total[p])
+    for rm in rms:
+        add("", "4", "L2", "", rm, "", rm_cons_val_p[p][rm])
+        add("", "4", "L3", "", "", "Opening stk", rm_op_val_p[p][rm])
+        add("", "4", "L3", "", "", "Purchase", rm_purch_val_p[p][rm])
+        add("", "4", "L3", "", "", "Consumption", rm_cons_val_p[p][rm])
+        add("", "4", "L3", "", "", "Cl stock", rm_cl_val_p[p][rm])
+    add("", "4", "L2", "", "Opening Stock", "", [sum(rm_op_val_p[p][rm][i] for rm in rms) for i in range(17)])
+    add("", "4", "L2", "", "Less : Closing Stock", "", [sum(rm_cl_val_p[p][rm][i] for rm in rms) for i in range(17)])
+    add("5", "5", "L1", "RM Consumption (%) (4/3)", "", "", pct_of(rm_cons_val_p_total[p], rev_lacs_p[p]), True)
+    for rm in rms: add("", "5", "L2", "", rm, "", pct_of(rm_cons_val_p[p][rm], rev_lacs_p[p]), True)
+    for n, h in enumerate(direct_heads): head(str(6 + n), h, dx_cost[h][p])
+    head("11", "Total Direct Exp (6+7+8+9+10)", dx_total_cost[p])
+    head("12", "COGS (4+11)", cogs_p[p])
+    head("13", "COGS % (12/3)", pct_of(cogs_p[p], rev_lacs_p[p]), True)
+    head("14", "Gross Profit (3-12)", gp_p[p])
+    head("15", "Gross Profit % (14/3)", pct_of(gp_p[p], rev_lacs_p[p]), True)
+    return pd.DataFrame(rows)
+df_pl_by_prod = {p: build_pl_product(p) for p in products}
+
 # -----------------------------------------------------------------------------
 # CHAPTER 4B (NEW): PRODUCT SLICER HELPERS (view-only filters; "All" returns the original tables)
 # -----------------------------------------------------------------------------
@@ -640,12 +675,12 @@ with page_tab_dx:
         st.markdown("---")
 
 with page_tab5:
-    st.title("PL Forecast")
+    sel_pl = title_with_slicer("PL Forecast", "slicer_pl")
     st.caption("Tick / untick the checkbox in the '+/-' column on any heading row to expand or collapse it. "
                "[+] = collapsed, [-] = expanded. Each heading (and each RM inside 'RM Consumption') opens independently.")
 
     # ---- 1. Describe the tree: for every master row -> node key, parent chain, has-children ----
-    master_pl = df_pl_master_raw.reset_index(drop=True)
+    master_pl = (df_pl_master_raw if sel_pl == "All" else df_pl_by_prod[sel_pl]).reset_index(drop=True)
     node_info = []                       # same order as master_pl
     cur_l1, cur_l2 = None, None
     for i in range(len(master_pl)):
