@@ -18,26 +18,28 @@ st.markdown("""
     div[data-testid="stVerticalBlock"] { gap: 0.5rem !important; }
     hr { border-color: #D4AF37 !important; margin: 0.5rem 0 !important; }
 
-    /* Navigation tabs */
+    /* Navigation tabs: same blue as the cockpit, bright-gold text, accent bar on the left (gold = default, red = selected) */
     div[data-testid="stTabs"] {
         position: sticky !important; top: 0px !important; background-color: #F6F4EC !important;
-        z-index: 9999 !important; padding-top: 4px !important; padding-bottom: 4px !important;
+        z-index: 9999 !important; padding-top: 4px !important; padding-bottom: 6px !important;
     }
-    div[data-testid="stTabs"] [data-baseweb="tab-list"] {
-        background: linear-gradient(90deg, #00294A, #0B3D6B) !important; border-radius: 8px !important;
-        padding: 4px 8px !important; gap: 6px !important; border-bottom: 3px solid #D4AF37 !important;
+    .stApp div[role="tablist"], .stApp div[data-baseweb="tab-list"] {
+        background: #00294A !important; border: none !important; border-radius: 8px !important;
+        padding: 6px 10px !important; gap: 10px !important;
     }
-    div[data-testid="stTabs"] button[role="tab"] { background: transparent !important; border-radius: 6px !important; }
-    div[data-testid="stTabs"] button[role="tab"] p { color: #F1DE9C !important; font-weight: 600 !important; }
-    div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] { background: #D4AF37 !important; }
-    div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] p { color: #00294A !important; }
-    div[data-testid="stTabs"] [data-baseweb="tab-highlight"] { background-color: #FFFFFF !important; height: 3px !important; }
-    div[data-testid="stTabs"] [data-baseweb="tab-border"] { background-color: transparent !important; }
+    .stApp button[role="tab"] { background: transparent !important; border-radius: 4px !important; border-left: 4px solid #D4AF37 !important; box-shadow: none !important; padding: 6px 14px !important; }
+    .stApp button[role="tab"], .stApp button[role="tab"] *, .stApp button[role="tab"] p { color: #FFD24C !important; font-weight: 700 !important; }
+    .stApp button[role="tab"]:hover { background: rgba(255,210,76,0.12) !important; }
+    .stApp button[role="tab"][aria-selected="true"] { background: #0B3D6B !important; border-left: 4px solid #E53935 !important; box-shadow: inset 0 -3px 0 #E53935 !important; }
+    .stApp button[role="tab"][aria-selected="true"], .stApp button[role="tab"][aria-selected="true"] *, .stApp button[role="tab"][aria-selected="true"] p { color: #FF5252 !important; }
+    div[data-baseweb="tab-highlight"] { display: none !important; }
+    div[data-baseweb="tab-border"] { background-color: transparent !important; }
 
-    /* Headings */
+    /* Headings (explicit line-height + bottom space so a heading never sits under the table below it) */
     .stApp h1 { color: #00294A !important; font-size: 1.8rem !important; padding: 0 0 0.1rem 0 !important; margin: 0 !important; border-bottom: 3px solid #D4AF37; display: inline-block; }
-    .stApp h2, .stApp h3 { color: #00294A !important; font-size: 1.2rem !important; padding: 0 0 0 0.6rem !important; margin: 0.2rem 0 0 0 !important; border-left: 5px solid #D4AF37; }
-    .stApp h5 { color: #0B3D6B !important; margin: 0 !important; padding: 0 !important; }
+    .stApp h2, .stApp h3 { color: #00294A !important; font-size: 1.2rem !important; line-height: 1.6 !important; padding: 0.1rem 0 0.45rem 0.6rem !important; margin: 0.5rem 0 0.5rem 0 !important; border-left: 5px solid #D4AF37; overflow: visible !important; }
+    .stApp h5 { color: #0B3D6B !important; line-height: 1.6 !important; margin: 0.4rem 0 0.4rem 0 !important; padding: 0.1rem 0 0.4rem 0 !important; overflow: visible !important; }
+    div[data-testid="stHeading"], div[data-testid="stHeadingWithActionElements"] { height: auto !important; overflow: visible !important; margin-bottom: 0.3rem !important; }
     div[data-testid="stCaptionContainer"] p { color: #0B3D6B !important; }
 
     /* Slicer + download button */
@@ -48,14 +50,27 @@ st.markdown("""
     div[data-testid="stDownloadButton"] button:hover p { color: #00294A !important; }
 
     /* Tables */
-    div[data-testid="stDataFrame"] { border: 1.5px solid #D4AF37; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,41,74,0.18); }
+    div[data-testid="stDataFrame"] { border: 1.5px solid #D4AF37; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,41,74,0.18); margin-top: 0.35rem; }
 
     /* Sidebar cockpit */
     section[data-testid="stSidebar"] { background: linear-gradient(180deg, #00294A, #001B33) !important; border-right: 2px solid #D4AF37; }
-    section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] { padding-top: 1rem !important; }
+    section[data-testid="stSidebar"] [data-testid="stSidebarHeader"] { height: 2.2rem !important; min-height: 0 !important; padding-top: 0.4rem !important; margin-bottom: 0 !important; }
+    section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] { padding-top: 0.2rem !important; }
     section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2, section[data-testid="stSidebar"] h3 { color: #D4AF37 !important; border-left: none !important; padding-left: 0 !important; }
     section[data-testid="stSidebar"] label p, section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p { color: #F1DE9C !important; }
     section[data-testid="stSidebar"] hr { border-color: #D4AF37 !important; }
+    section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] { align-items: center !important; }
+    section[data-testid="stSidebar"] div[data-testid="stCaptionContainer"] { margin: 0.3rem 0 0.5rem 0 !important; }
+    /* heading card above every feed box */
+    .feed-title { color: #FFD24C; font-weight: 700; font-size: 0.9rem; line-height: 1.4; background: rgba(212,175,55,0.16); border-left: 5px solid #D4AF37; border-radius: 6px; padding: 6px 10px; margin: 1.1rem 0 0.7rem 0; }
+    /* feed boxes: gold frame + glow so they read as boxes to key into */
+    section[data-testid="stSidebar"] div[data-testid="stDataFrame"] { border: 2px solid #D4AF37 !important; border-radius: 10px !important; box-shadow: 0 0 0 3px rgba(212,175,55,0.35), 0 6px 14px rgba(0,0,0,0.45) !important; margin: 0.5rem 0.4rem 1.1rem 0.2rem !important; }
+    section[data-testid="stSidebar"] div[data-testid="stNumberInput"] div[data-baseweb="input"] { background: #FFF6D6 !important; border: 2px solid #D4AF37 !important; border-radius: 8px !important; }
+    section[data-testid="stSidebar"] div[data-testid="stNumberInput"] input { color: #00294A !important; font-weight: 700 !important; background: transparent !important; }
+    /* cockpit spread / squeeze arrow button */
+    section[data-testid="stSidebar"] div[data-testid="stButton"] { display: flex; justify-content: flex-end; }
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button { background: #D4AF37 !important; border: 2px solid #F1DE9C !important; min-height: 2rem !important; padding: 0 0.9rem !important; }
+    section[data-testid="stSidebar"] div[data-testid="stButton"] button, section[data-testid="stSidebar"] div[data-testid="stButton"] button * { color: #00294A !important; font-weight: 800 !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -175,7 +190,7 @@ ix_type = {"Employment Cost": "%", "Selling & Distribution": "p.u", "Travelling 
 ix_short = {"Employment Cost": "Employment", "Selling & Distribution": "S&D", "Travelling Expenses": "Travelling",
             "Carriage Outward": "Carriage Out", "Rent": "Rent", "Insurance": "Insurance",
             "Warehouse Exp": "Warehouse", "Other Admin charges": "Other Admin"}
-IX_RATE_COL = "Rate (Rs/Kg sold or % of Sale)"
+IX_RATE_COL = "Rate (Rs/Kg or %)"
 
 # One rate / % for all products: p.u. heads = Rs per Kg sold, % heads = % of sale value
 if "sidebar_ix_df" not in st.session_state:
@@ -197,12 +212,62 @@ if "sidebar_ix_infl_df" not in st.session_state:
 # NOTE: the radio below is switched automatically when the user clicks a top tab
 # (small script at the very end of this file - see CHAPTER 7).
 
+# ---- Cockpit width: the arrow button spreads the cockpit (feed tables fill the screen, no scrolling) or squeezes it back ----
+if "cockpit_wide" not in st.session_state:
+    st.session_state.cockpit_wide = False
+def _toggle_cockpit():
+    st.session_state.cockpit_wide = not st.session_state.cockpit_wide
+if st.session_state.cockpit_wide:
+    st.markdown("""
+    <style>
+    section[data-testid="stSidebar"]:not([aria-expanded="false"]) { width: min(78vw, 1150px) !important; min-width: min(78vw, 1150px) !important; max-width: min(78vw, 1150px) !important; }
+    section[data-testid="stSidebar"]:not([aria-expanded="false"]) > div { width: 100% !important; }
+    section[data-testid="stSidebar"] div[data-testid="stNumberInput"] { max-width: 260px !important; }
+    </style>""", unsafe_allow_html=True)
+
+def _col_px(df, c):
+    """Column width in pixels from the longest text in the column (header or cell)."""
+    head = len(str(c)) * 7.2 + 44                       # header text + sort / menu icons
+    cells = max([len(str(v)) for v in df[c].tolist()] + [1]) * 8 + 24
+    return int(min(max(head, cells, 64), 300))
+
+def sb_editor(df, **kw):
+    """Cockpit feed table. Squeezed: as before. Spread: every column is sized to its data, so the box stays compact."""
+    if st.session_state.cockpit_wide:
+        try:
+            cfg = dict(kw.get("column_config") or {})
+            total = 0
+            for c in df.columns:
+                px = _col_px(df, c)
+                base = dict(cfg[c]) if c in cfg else dict(st.column_config.Column(label=str(c)))
+                base["width"] = px
+                cfg[c] = base
+                total += px
+            kw2 = dict(kw, column_config=cfg)
+            try:
+                return st.data_editor(df, width=total + 12, **kw2)
+            except TypeError:
+                return st.data_editor(df, **kw2)
+        except Exception:
+            pass
+    return st.data_editor(df, **kw)
+
+def feed_title(text):
+    """Heading shown above every feed box so the user knows what to key in."""
+    st.markdown(f'<div class="feed-title">▸ {text}</div>', unsafe_allow_html=True)
+
 with st.sidebar:
-    st.header("⚙️ Workspace Configuration Cockpit")
+    _h_col, _b_col = st.columns([5, 4])
+    with _h_col:
+        st.header("⚙️ Cockpit Feed")
+    with _b_col:
+        st.button("❮  Squeeze" if st.session_state.cockpit_wide else "Spread  ❯", on_click=_toggle_cockpit,
+                  help="Click to squeeze the cockpit back" if st.session_state.cockpit_wide else "Click to spread the cockpit so the feed tables are fully visible")
     sidebar_context = st.radio(
-        "🎯 Focus Workspace Target Viewport Context:",
+        "Cockpit Feed",
         options=["Sales / FG Feed", "RM Qt Feed", "RM Val Feed", "Direct Expenses Feed", "Indirect Expenses Feed"],
-        key="synchronized_sidebar_context_radio_widget"
+        key="synchronized_sidebar_context_radio_widget",
+        label_visibility="collapsed"
     )
     st.markdown("---")
 
@@ -224,51 +289,60 @@ with st.sidebar:
         g_y4 = g4_pct / 100.0
         g5_pct = st.number_input("Year 5 Volume Growth (%)", value=st.session_state.growth_saved[3])
         g_y5 = g5_pct / 100.0
-        edited_qty_df = st.data_editor(st.session_state.sidebar_qty_df, hide_index=True, column_config={"Timeline": st.column_config.TextColumn(disabled=True)})
+        feed_title("Monthly Sales Qt (Kg) - M1 to M12, by Product")
+        edited_qty_df = sb_editor(st.session_state.sidebar_qty_df, hide_index=True, column_config={"Timeline": st.column_config.TextColumn(disabled=True)})
         st.session_state.growth_saved = [g2_pct, g3_pct, g4_pct, g5_pct]
         st.session_state.sidebar_qty_df = edited_qty_df
-        edited_rate_df = st.data_editor(st.session_state.sidebar_rate_df, hide_index=True, column_config={"Timeline": st.column_config.TextColumn(disabled=True)})
+        feed_title("FG Selling Rate (Rs/Kg) - M1 to M12 and Year 2-5 base rate, by Product")
+        edited_rate_df = sb_editor(st.session_state.sidebar_rate_df, hide_index=True, column_config={"Timeline": st.column_config.TextColumn(disabled=True)})
         st.session_state.sidebar_rate_df = edited_rate_df
-        edited_fg_inflation_df = st.data_editor(st.session_state.sidebar_fg_inflation_df, hide_index=True, column_config={"Timeline": st.column_config.TextColumn(disabled=True)})
+        feed_title("FG Price Inflation (% YoY) - Year 2 to Year 5, by Product")
+        edited_fg_inflation_df = sb_editor(st.session_state.sidebar_fg_inflation_df, hide_index=True, column_config={"Timeline": st.column_config.TextColumn(disabled=True)})
         st.session_state.sidebar_fg_inflation_df = edited_fg_inflation_df
-        edited_prod_params_df = st.data_editor(st.session_state.sidebar_prod_params_df, hide_index=True, column_config={"Parameters": st.column_config.TextColumn(disabled=True)})
+        feed_title("FG Warehouse - M1 Opening Stock Qt and Closing Stock Hold Days, by Product")
+        edited_prod_params_df = sb_editor(st.session_state.sidebar_prod_params_df, hide_index=True, column_config={"Parameters": st.column_config.TextColumn(disabled=True)})
         st.session_state.sidebar_prod_params_df = edited_prod_params_df
         edited_bom_df, edited_rm_logistics_df, edited_rm_price_df, edited_rm_inflation_df = st.session_state.sidebar_bom_df, st.session_state.sidebar_rm_logistics_df, st.session_state.sidebar_rm_price_df, st.session_state.sidebar_rm_inflation_df
     elif sidebar_context == "RM Qt Feed":
         st.header("🧱 2. RM Qt Feed Desk")
-        edited_bom_df = st.data_editor(st.session_state.sidebar_bom_df, hide_index=True, column_config={"RM Name": st.column_config.TextColumn(disabled=True), "Target FG": st.column_config.TextColumn(disabled=True)})
+        feed_title("BOM - RM Consumption % per FG, Visible Loss and Invisible Loss")
+        edited_bom_df = sb_editor(st.session_state.sidebar_bom_df, hide_index=True, column_config={"RM Name": st.column_config.TextColumn(disabled=True), "Target FG": st.column_config.TextColumn(disabled=True)})
         st.session_state.sidebar_bom_df = edited_bom_df
-        edited_rm_logistics_df = st.data_editor(st.session_state.sidebar_rm_logistics_df, hide_index=True, column_config={"Raw Material": st.column_config.TextColumn(disabled=True)})
+        feed_title("RM Stock - M1 Opening Stock Qt and Days Hold, by Raw Material")
+        edited_rm_logistics_df = sb_editor(st.session_state.sidebar_rm_logistics_df, hide_index=True, column_config={"Raw Material": st.column_config.TextColumn(disabled=True)})
         st.session_state.sidebar_rm_logistics_df = edited_rm_logistics_df
         edited_qty_df, edited_rate_df, edited_fg_inflation_df, edited_prod_params_df, edited_rm_price_df, edited_rm_inflation_df = st.session_state.sidebar_qty_df, st.session_state.sidebar_rate_df, st.session_state.sidebar_fg_inflation_df, st.session_state.sidebar_prod_params_df, st.session_state.sidebar_rm_price_df, st.session_state.sidebar_rm_inflation_df
         g_y2, g_y3, g_y4, g_y5 = [x / 100.0 for x in st.session_state.growth_saved]
     elif sidebar_context == "RM Val Feed":
         st.header("💰 3. RM Val Feed Desk")
-        edited_rm_price_df = st.data_editor(st.session_state.sidebar_rm_price_df, hide_index=True, column_config={"Raw Material": st.column_config.TextColumn(disabled=True)})
+        feed_title("RM Initial Purchase Price (Rs/Kg), by Raw Material")
+        edited_rm_price_df = sb_editor(st.session_state.sidebar_rm_price_df, hide_index=True, column_config={"Raw Material": st.column_config.TextColumn(disabled=True)})
         st.session_state.sidebar_rm_price_df = edited_rm_price_df
-        edited_rm_inflation_df = st.data_editor(st.session_state.sidebar_rm_inflation_df, hide_index=True, column_config={"Timeline": st.column_config.TextColumn(disabled=True)})
+        feed_title("RM Price Inflation (% YoY) - Year 2 to Year 5")
+        edited_rm_inflation_df = sb_editor(st.session_state.sidebar_rm_inflation_df, hide_index=True, column_config={"Timeline": st.column_config.TextColumn(disabled=True)})
         st.session_state.sidebar_rm_inflation_df = edited_rm_inflation_df
         edited_qty_df, edited_rate_df, edited_fg_inflation_df, edited_prod_params_df, edited_bom_df, edited_rm_logistics_df = st.session_state.sidebar_qty_df, st.session_state.sidebar_rate_df, st.session_state.sidebar_fg_inflation_df, st.session_state.sidebar_prod_params_df, st.session_state.sidebar_bom_df, st.session_state.sidebar_rm_logistics_df
         g_y2, g_y3, g_y4, g_y5 = [x / 100.0 for x in st.session_state.growth_saved]
     elif sidebar_context == "Direct Expenses Feed":
         st.header("🏭 4. Direct Expenses Feed Desk")
         st.caption("Rate per unit of production (Rs) - applied to Production Qt")
-        edited_dx_rate_df = st.data_editor(st.session_state.sidebar_dx_rate_df, hide_index=True, column_config={"Expense Head": st.column_config.TextColumn(disabled=True)})
+        edited_dx_rate_df = sb_editor(st.session_state.sidebar_dx_rate_df, hide_index=True, column_config={"Expense Head": st.column_config.TextColumn(disabled=True)})
         st.session_state.sidebar_dx_rate_df = edited_dx_rate_df
-        edited_dx_common_df = st.data_editor(st.session_state.sidebar_dx_common_df, hide_index=True, column_config={"Expense Head": st.column_config.TextColumn(disabled=True)})
+        feed_title("Common Rate p.u. (Rs) - same rate for all products")
+        edited_dx_common_df = sb_editor(st.session_state.sidebar_dx_common_df, hide_index=True, column_config={"Expense Head": st.column_config.TextColumn(disabled=True)})
         st.session_state.sidebar_dx_common_df = edited_dx_common_df
         st.caption("YoY inflation (%) on rate p.u. - Year 2 to Year 5")
-        edited_dx_infl_df = st.data_editor(st.session_state.sidebar_dx_infl_df, hide_index=True, column_config={"Expense Head": st.column_config.TextColumn(disabled=True)})
+        edited_dx_infl_df = sb_editor(st.session_state.sidebar_dx_infl_df, hide_index=True, column_config={"Expense Head": st.column_config.TextColumn(disabled=True)})
         st.session_state.sidebar_dx_infl_df = edited_dx_infl_df
         edited_qty_df, edited_rate_df, edited_fg_inflation_df, edited_prod_params_df, edited_bom_df, edited_rm_logistics_df, edited_rm_price_df, edited_rm_inflation_df = st.session_state.sidebar_qty_df, st.session_state.sidebar_rate_df, st.session_state.sidebar_fg_inflation_df, st.session_state.sidebar_prod_params_df, st.session_state.sidebar_bom_df, st.session_state.sidebar_rm_logistics_df, st.session_state.sidebar_rm_price_df, st.session_state.sidebar_rm_inflation_df
         g_y2, g_y3, g_y4, g_y5 = [x / 100.0 for x in st.session_state.growth_saved]
     else:
         st.header("🏢 5. Indirect Expenses Feed Desk")
         st.caption("Initial rate - Rs per Kg sold (p.u.) or % of Sale Value, as per 'Against Sale'. Same rate for P1, P2, P3")
-        edited_ix_df = st.data_editor(st.session_state.sidebar_ix_df, hide_index=True, column_config={"Expense Head": st.column_config.TextColumn(disabled=True), "Against Sale": st.column_config.TextColumn(disabled=True)})
+        edited_ix_df = sb_editor(st.session_state.sidebar_ix_df, hide_index=True, column_config={"Expense Head": st.column_config.TextColumn(disabled=True), "Against Sale": st.column_config.TextColumn(disabled=True)})
         st.session_state.sidebar_ix_df = edited_ix_df
         st.caption("YoY inflation (%) on rate / % - Year 2 to Year 5")
-        edited_ix_infl_df = st.data_editor(st.session_state.sidebar_ix_infl_df, hide_index=True, column_config={"Expense Head": st.column_config.TextColumn(disabled=True)})
+        edited_ix_infl_df = sb_editor(st.session_state.sidebar_ix_infl_df, hide_index=True, column_config={"Expense Head": st.column_config.TextColumn(disabled=True)})
         st.session_state.sidebar_ix_infl_df = edited_ix_infl_df
         edited_qty_df, edited_rate_df, edited_fg_inflation_df, edited_prod_params_df, edited_bom_df, edited_rm_logistics_df, edited_rm_price_df, edited_rm_inflation_df = st.session_state.sidebar_qty_df, st.session_state.sidebar_rate_df, st.session_state.sidebar_fg_inflation_df, st.session_state.sidebar_prod_params_df, st.session_state.sidebar_bom_df, st.session_state.sidebar_rm_logistics_df, st.session_state.sidebar_rm_price_df, st.session_state.sidebar_rm_inflation_df
         g_y2, g_y3, g_y4, g_y5 = [x / 100.0 for x in st.session_state.growth_saved]
@@ -901,21 +975,28 @@ with page_tab5:
         toggle_vals = [((node_info[i]["node"] in open_nodes) if node_info[i]["has_children"] else None) for i in visible_idx]
         styled_pl_df.insert(0, "+/-", pd.array(toggle_vals, dtype="boolean"))
 
-        st.data_editor(
-            styled_pl_df,
+        # Fixed pixel widths (never auto-sized) and pinned (frozen) left columns, so the heads stay visible while scrolling right
+        _pl_px = {"+/-": 48, "Si No": 52, "Level 1": 215, "Level 2": 175, "Level 3": 115, "Level 4": 100}
+        def _pl_cfg(modern):
+            cfg = {}
+            for _c, _w in _pl_px.items():
+                _kw = dict(width=_w, pinned=True) if modern else dict(width=("small" if _w < 100 else "medium"))
+                if _c == "+/-": cfg[_c] = st.column_config.CheckboxColumn("+/-", help="Tick to expand, untick to collapse", **_kw)
+                else: cfg[_c] = st.column_config.TextColumn(_c, **_kw)
+            return cfg
+        _pl_args = dict(
             use_container_width=True,
             hide_index=True,
             num_rows="fixed",
             disabled=[c for c in styled_pl_df.columns if c != "+/-"],
-            column_config={"+/-": st.column_config.CheckboxColumn("+/-", help="Tick to expand, untick to collapse", width="small"),
-                           "Level 1": st.column_config.TextColumn("Level 1", width="large"),
-                           "Level 2": st.column_config.TextColumn("Level 2", width="medium"),
-                           "Level 3": st.column_config.TextColumn("Level 3", width="medium"),
-                           "Level 4": st.column_config.TextColumn("Level 4", width="medium")},
             height=min(35 * (len(styled_pl_df) + 1) + 5, 1100),
             key=f"pl_tree_editor_{st.session_state.pl_editor_ver}",
             on_change=pl_tree_toggle_cb,
         )
+        try:
+            st.data_editor(styled_pl_df, column_config=_pl_cfg(True), **_pl_args)
+        except Exception:      # older Streamlit without pixel widths / pinned columns
+            st.data_editor(styled_pl_df, column_config=_pl_cfg(False), **_pl_args)
     else:
         st.warning("No structural P&L rows selected.")
 
@@ -976,26 +1057,57 @@ import streamlit.components.v1 as components
 components.html(r"""
 <script>
 (function () {
-    const P = window.parent, doc = P.document;
-    const MAP = {"Revenue": "Sales / FG Feed", "FG": "Sales / FG Feed",
-                 "RM Qt": "RM Qt Feed", "RM Val": "RM Val Feed", "Direct Expenses": "Direct Expenses Feed", "Indirect Expenses": "Indirect Expenses Feed", "PL": "RM Val Feed"};
-    const norm = s => (s || "").replace(/\s+/g, " ").trim();
-    if (P.__tabRadioSyncHandler) doc.removeEventListener("click", P.__tabRadioSyncHandler, true);
-    P.__tabRadioSyncHandler = function (e) {
-        const tab = e.target.closest('button[role="tab"]');
-        if (!tab) return;
-        const want = MAP[norm(tab.innerText)];
-        if (!want) return;
-        const labels = doc.querySelectorAll('[data-testid="stSidebar"] label');
-        for (const lb of labels) {
-            const inp = lb.querySelector('input[type="radio"]');
-            if (inp && norm(lb.innerText) === want) {
-                if (!inp.checked) lb.click();
-                return;
+    try {
+        const P = window.parent, doc = P.document;
+        const MAP = {"Revenue": "Sales / FG Feed", "FG": "Sales / FG Feed",
+                     "RM Qt": "RM Qt Feed", "RM Val": "RM Val Feed", "Direct Expenses": "Direct Expenses Feed",
+                     "Indirect Expenses": "Indirect Expenses Feed", "PL": "RM Val Feed"};
+        const norm = s => (s || "").replace(/\s+/g, " ").trim();
+        const selectedTab = () => {
+            const t = doc.querySelector('button[role="tab"][aria-selected="true"]');
+            return t ? norm(t.innerText) : null;
+        };
+        // click the matching radio option in the cockpit (label first, then the input itself as a fallback)
+        const setRadio = (want) => {
+            const scope = doc.querySelector('[data-testid="stSidebar"]') || doc;
+            for (const lb of scope.querySelectorAll("label")) {
+                if (norm(lb.innerText) !== want) continue;
+                const inp = lb.querySelector('input[type="radio"]');
+                if (inp && inp.checked) return true;
+                lb.click();
+                setTimeout(() => { const i = lb.querySelector('input[type="radio"]'); if (i && !i.checked) i.click(); }, 300);
+                return true;
             }
-        }
-    };
-    doc.addEventListener("click", P.__tabRadioSyncHandler, true);
+            return false;
+        };
+        // paint the navigation tabs inline: gold text + gold left bar (default), red text + red bar + red underline (selected)
+        const paintTabs = () => {
+            const S = (el, p, v) => el.style.setProperty(p, v, "important");
+            doc.querySelectorAll('div[data-baseweb="tab-highlight"]').forEach(h => S(h, "display", "none"));
+            doc.querySelectorAll('div[role="tablist"]').forEach(l => { S(l, "background", "#00294A"); S(l, "border", "none"); });
+            doc.querySelectorAll('button[role="tab"]').forEach(b => {
+                const sel = b.getAttribute("aria-selected") === "true";
+                const col = sel ? "#FF5252" : "#FFD24C";
+                S(b, "color", col); S(b, "font-weight", "700");
+                S(b, "background", sel ? "#0B3D6B" : "transparent");
+                S(b, "border-left", "4px solid " + (sel ? "#E53935" : "#D4AF37"));
+                S(b, "box-shadow", sel ? "inset 0 -3px 0 #E53935" : "none");
+                b.querySelectorAll("*").forEach(c => { S(c, "color", col); S(c, "font-weight", "700"); });
+            });
+        };
+        if (P.__tabRadioSyncHandler) { doc.removeEventListener("click", P.__tabRadioSyncHandler, true); P.__tabRadioSyncHandler = null; }
+        if (P.__tabSyncTimer) P.clearInterval(P.__tabSyncTimer);
+        paintTabs();
+        let last = selectedTab();
+        // watch which top tab is selected (works for mouse, keyboard and touch) and follow it with the cockpit radio
+        P.__tabSyncTimer = P.setInterval(function () {
+            paintTabs();
+            const cur = selectedTab();
+            if (!cur || cur === last) return;
+            const want = MAP[cur];
+            if (!want || setRadio(want)) last = cur;      // radio not rendered yet -> retry on the next tick
+        }, 250);
+    } catch (err) { console.warn("tab / cockpit sync unavailable", err); }
 })();
 </script>
 """, height=0)
