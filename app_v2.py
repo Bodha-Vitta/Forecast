@@ -73,8 +73,11 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-products = ["P1", "P2", "P3"]
-raw_materials = [f"RM{i}" for i in range(1, 13)]
+products = ["P1", "P2", "P3", "P4"]                       # P4 = new product on the new capex project
+products_base = ["P1", "P2", "P3"]                         # products fed through the original Sales / FG feed tables
+raw_materials = [f"RM{i}" for i in range(1, 16)]           # RM13-RM15 are used by P4
+p4_rms = ["RM13", "RM14", "RM15"]
+rm_base = [f"RM{i}" for i in range(1, 13)]                # RM1-RM12 : fed through the original RM feed tables
 months = [f"M{i}" for i in range(1, 13)]
 future_years = ["Year 2", "Year 3", "Year 4", "Year 5"]
 display_columns = months + ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5"]
@@ -108,17 +111,17 @@ if "sidebar_prod_params_df" not in st.session_state:
 # 5. Initialize Dynamic BOM Matrix Setup
 if "sidebar_bom_df" not in st.session_state:
     bom_data = {
-        "RM Name": ["RM1", "RM2", "RM3", "RM4", "RM5", "RM6", "RM1", "RM7", "RM8", "RM9", "RM10", "RM1", "RM11", "RM12"],
-        "Target FG": ["P1", "P1", "P1", "P1", "P1", "P1", "P2", "P2", "P2", "P2", "P2", "P3", "P3", "P3"],
-        "Con%": [0.70, 0.15, 0.05, 0.04, 0.03, 0.03, 0.70, 0.20, 0.03, 0.04, 0.03, 0.70, 0.20, 0.10],
-        "Visible Loss": [0.04] * 14, "Invisible Loss": [0.01] * 14
+        "RM Name": ["RM1", "RM2", "RM3", "RM4", "RM5", "RM6", "RM1", "RM7", "RM8", "RM9", "RM10", "RM1", "RM11", "RM12", "RM13", "RM14", "RM15"],
+        "Target FG": ["P1", "P1", "P1", "P1", "P1", "P1", "P2", "P2", "P2", "P2", "P2", "P3", "P3", "P3", "P4", "P4", "P4"],
+        "Con%": [0.70, 0.15, 0.05, 0.04, 0.03, 0.03, 0.70, 0.20, 0.03, 0.04, 0.03, 0.70, 0.20, 0.10, 0.60, 0.30, 0.10],
+        "Visible Loss": [0.04] * 17, "Invisible Loss": [0.01] * 17
     }
     st.session_state.sidebar_bom_df = pd.DataFrame(bom_data)
 
 # 6. Initialize Raw Material Logistics Inventory parameters
 if "sidebar_rm_logistics_df" not in st.session_state:
     logistics_data = {
-        "Raw Material": raw_materials,
+        "Raw Material": rm_base,
         "M1 Initial Op Stock Qty": [13000.0, 1658.0, 553.0, 442.0, 332.0, 332.0, 1700.0, 250.0, 350.0, 250.0, 100.0, 50.0],
         "Days Hold": [45.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0]
     }
@@ -127,7 +130,7 @@ if "sidebar_rm_logistics_df" not in st.session_state:
 # 7. Initialize Raw Material Base Unit Commercial Procurement Price Feeder
 if "sidebar_rm_price_df" not in st.session_state:
     st.session_state.sidebar_rm_price_df = pd.DataFrame({
-        "Raw Material": raw_materials,
+        "Raw Material": rm_base,
         "Initial Price": [100.0, 400.0, 20.0, 250.0, 200.0, 250.0, 200.0, 250.0, 20.0, 100.0, 600.0, 400.0]
     })
 
@@ -171,7 +174,7 @@ if "gst_pur_saved" not in st.session_state:
 # Opening creditors (Rs Lacs) by RM: pre-filled with M1 purchase value + 18% GST at the default inputs; the user may overwrite any figure
 if "sidebar_op_cred_df" not in st.session_state:
     st.session_state.sidebar_op_cred_df = pd.DataFrame({
-        "Raw Material": raw_materials,
+        "Raw Material": rm_base,
         "Opening Creditors (Rs Lacs)": [21.613, 4.098, 0.068, 0.683, 0.409, 0.511, 4.434, 0.846, 0.086, 0.338, 0.783, 0.261]
     })
 
@@ -188,7 +191,7 @@ if "wc_od_saved" not in st.session_state:
     st.session_state.wc_od_saved = 2.0            # opening bank OD / CC balance (Rs lacs)
 if "wc_margin_saved" not in st.session_state:
     st.session_state.wc_margin_saved = 25.0       # margin on working capital gap (%)
-wc_flow_cols = ["TL Interest & Bank Charges", "FD Increment", "Tax Payment Provision", "Other Contingency Requirement"]
+wc_flow_cols = ["FD Increment", "Tax Payment Provision", "Other Contingency Requirement"]   # TL Interest & Bank Charges now comes from the TL page
 wc_bal_cols = ["Stock-in-Process", "Other Current Assets", "Other Current Liabilities"]
 if "sidebar_wc_flow_df" not in st.session_state:
     st.session_state.sidebar_wc_flow_df = pd.DataFrame({"Timeline": months + future_years, **{c: [0.0] * 16 for c in wc_flow_cols}})
@@ -205,7 +208,7 @@ dx_short = {"Direct Wages": "Wages", "Power & Fuel": "Power & Fuel", "Repair & M
 if "sidebar_dx_rate_df" not in st.session_state:
     st.session_state.sidebar_dx_rate_df = pd.DataFrame({
         "Expense Head": ["Direct Wages", "Power & Fuel", "Repair & Maintenance"],
-        "P1": [7.0, 5.0, 1.0], "P2": [8.0, 6.0, 1.5], "P3": [9.0, 7.0, 2.0]
+        "P1": [7.0, 5.0, 1.0], "P2": [8.0, 6.0, 1.5], "P3": [9.0, 7.0, 2.0], "P4": [9.0, 7.0, 2.0]
     })
 # Rate per unit of production (Rs) - single rate for all products
 if "sidebar_dx_common_df" not in st.session_state:
@@ -244,6 +247,74 @@ if "sidebar_ix_infl_df" not in st.session_state:
         "Expense Head": indirect_heads,
         "Year 2 (%)": _ix_inf, "Year 3 (%)": _ix_inf, "Year 4 (%)": _ix_inf, "Year 5 (%)": _ix_inf
     })
+# ---- Sessions opened before P4 existed: add the P4 BOM rows / P4 Direct Expense rates once ----
+if "P4" not in set(st.session_state.sidebar_bom_df["Target FG"]):
+    st.session_state.sidebar_bom_df = pd.concat([st.session_state.sidebar_bom_df, pd.DataFrame({
+        "RM Name": p4_rms, "Target FG": ["P4"] * 3, "Con%": [0.60, 0.30, 0.10], "Visible Loss": [0.04] * 3, "Invisible Loss": [0.01] * 3})], ignore_index=True)
+if "P4" not in st.session_state.sidebar_dx_rate_df.columns:
+    st.session_state.sidebar_dx_rate_df = st.session_state.sidebar_dx_rate_df.assign(P4=[9.0, 7.0, 2.0])
+
+# ---- NEW: P4 / NEW CAPEX FEED (P4 cockpit feed & default figures) ----
+p4_cols = months + ["Year 2", "Year 3", "Year 4", "Year 5"]
+P4_ROWS = ["Sale Qt Projection (Kg)", "Growth % : Sale", "Selling Rate (Rs/Kg)", "Selling Rate Inflation %",
+           "FG Inventory Hold Days", "New Capex Payment (Rs Lacs)", "New Capex Installation Cost (Rs Lacs)"]
+if "sidebar_p4_df" not in st.session_state:
+    _z = [0.0] * 16
+    _rows = {
+        "Sale Qt Projection (Kg)":               [0.0] * 8 + [100.0, 500.0, 600.0, 800.0] + [0.0] * 4,
+        "Growth % : Sale":                       [0.0] * 12 + [20.0, 10.0, 5.0, 5.0],
+        "Selling Rate (Rs/Kg)":                  [600.0] * 12 + [0.0] * 4,
+        "Selling Rate Inflation %":              [0.0] * 12 + [5.0, 5.0, 5.0, 5.0],
+        "FG Inventory Hold Days":                [45.0] * 16,
+        "New Capex Payment (Rs Lacs)":           [0.0, 20.0, 20.0, 20.0, 0.0, 0.0, 40.0, 0.0, 0.0, 0.0, 0.0, 0.0] + [0.0] * 4,
+        "New Capex Installation Cost (Rs Lacs)": [0.0] * 7 + [2.0] + [0.0] * 8,
+    }
+    st.session_state.sidebar_p4_df = pd.DataFrame([{"P4 Assumption": k, **dict(zip(p4_cols, v))} for k, v in _rows.items()])
+if "p4_scalars" not in st.session_state:
+    st.session_state.p4_scalars = {"op_fg": 0.0, "op_dbt": 0.0, "dbt_days": 30.0, "adv_pct": 10.0, "crd_days": 35.0, "tl_pct": 85.0, "completion": "Auto"}
+if "sidebar_p4_rm_df" not in st.session_state:
+    st.session_state.sidebar_p4_rm_df = pd.DataFrame({
+        "Raw Material": p4_rms, "Initial Price": [100.0, 300.0, 400.0], "Days Hold": [30.0, 30.0, 30.0],
+        "M1 Initial Op Stock Qty": [0.0, 0.0, 0.0], "Opening Creditors (Rs Lacs)": [0.0, 0.0, 0.0]})
+
+# ---- NEW: FAR FEED (opening assets + asset additions) ----
+asset_classes = ["Plant & Machinery", "Electrical Equipments", "Furniture", "Vehicles", "Computers", "Building", "Land",
+                 "Brand Rights & Trade Mark", "Computer Software"]
+if "sidebar_far_open_df" not in st.session_state:
+    st.session_state.sidebar_far_open_df = pd.DataFrame({
+        "Asset": asset_classes,
+        "Gross Block (Rs Lacs)": [300.0, 20.0, 10.0, 10.0, 15.0, 30.0, 50.0, 5.0, 5.0],
+        "Gross Dep (Rs Lacs)":   [70.0, 5.0, 2.0, 3.0, 5.0, 9.0, 0.0, 1.0, 1.0],
+        "Rate of Dep (%)":       [5.0, 10.0, 7.0, 10.0, 10.0, 5.0, 0.0, 20.0, 20.0]})
+add_rows = ["Plant & Machinery (Regular)"] + asset_classes[1:]          # P&M (New Capex Project) is added automatically
+if "sidebar_far_add_df" not in st.session_state:
+    _a = {r: [0.0] * 16 for r in add_rows}
+    def _put(r, pos, v): _a[r][pos] = v                                    # pos 0-11 = M1-M12, 12-15 = Year 2-5
+    _put("Plant & Machinery (Regular)", 5, 1.0)
+    for k, v in zip(range(12, 16), [5.0, 10.0, 15.0, 10.0]): _put("Plant & Machinery (Regular)", k, v)
+    _put("Electrical Equipments", 3, 3.0)
+    _put("Furniture", 2, 2.0)
+    for r in ("Electrical Equipments", "Furniture"):
+        for k in range(12, 16): _put(r, k, 2.0)
+    _put("Vehicles", 11, 5.0); _put("Vehicles", 13, 5.0); _put("Vehicles", 15, 10.0)
+    for k in (1, 4, 7, 11): _put("Computers", k, 1.0)
+    for k in range(12, 16): _put("Computers", k, 3.0)
+    for k in (0, 2, 6, 9): _put("Building", k, 1.0)
+    for k in range(12, 16): _put("Building", k, 2.0)
+    _put("Land", 12, 10.0)
+    st.session_state.sidebar_far_add_df = pd.DataFrame([{"Asset Addition (Rs Lacs)": r, **dict(zip(p4_cols, v))} for r, v in _a.items()])
+
+# ---- NEW: TL FEED (term loans + bank charges) ----
+tl_names = ["TL1", "TL2", "TL3", "TL New"]
+if "sidebar_tl_df" not in st.session_state:
+    st.session_state.sidebar_tl_df = pd.DataFrame({
+        "Term Loan": tl_names,
+        "Opening O/s M1 (Rs Lacs)": [10.0, 20.0, 5.0, 0.0],
+        "Interest Rate (% p.a.)":    [9.0, 8.0, 7.0, 8.0],
+        "Life Left (Months)":        [24.0, 35.0, 36.0, 48.0]})
+if "bank_chg_saved" not in st.session_state:
+    st.session_state.bank_chg_saved = 0.05            # % per month on month-end outstanding (WC borrowing and TL)
+
 # -----------------------------------------------------------------------------
 # CHAPTER 2: SIDEBAR CONTROL PANEL DESK
 # -----------------------------------------------------------------------------
@@ -309,11 +380,13 @@ with st.sidebar:
     st.caption("🔴 = key-in column  |  heading without 🔴 = fixed, not editable")
     sidebar_context = st.radio(
         "Cockpit Feed",
-        options=["Sales / FG Feed", "RM Qt Feed", "RM Val Feed", "Direct Expenses Feed", "Indirect Expenses Feed", "WC Feed"],
+        options=["Sales / FG Feed", "RM Qt Feed", "RM Val Feed", "Direct Expenses Feed", "Indirect Expenses Feed", "WC Feed",
+                 "P4 / New Capex Feed", "FAR Feed", "TL Feed"],
         key="synchronized_sidebar_context_radio_widget",
         label_visibility="collapsed"
     )
     st.markdown("---")
+    _p4_cockpit_auto = False
 
     # Direct Expenses feed tables (edited only inside the Direct Expenses Feed desk below)
     edited_dx_rate_df = st.session_state.sidebar_dx_rate_df
@@ -333,6 +406,14 @@ with st.sidebar:
     wc_cash_open, wc_roi = st.session_state.wc_cash_saved, st.session_state.wc_roi_saved
     wc_od_open, wc_margin = st.session_state.wc_od_saved, st.session_state.wc_margin_saved
     edited_wc_flow_df, edited_wc_bal_df = st.session_state.sidebar_wc_flow_df, st.session_state.sidebar_wc_bal_df
+    # All other feeds default to their saved values; the desk that is open below overwrites its own ones
+    edited_qty_df, edited_rate_df, edited_fg_inflation_df, edited_prod_params_df = st.session_state.sidebar_qty_df, st.session_state.sidebar_rate_df, st.session_state.sidebar_fg_inflation_df, st.session_state.sidebar_prod_params_df
+    edited_bom_df, edited_rm_logistics_df, edited_rm_price_df, edited_rm_inflation_df = st.session_state.sidebar_bom_df, st.session_state.sidebar_rm_logistics_df, st.session_state.sidebar_rm_price_df, st.session_state.sidebar_rm_inflation_df
+    g_y2, g_y3, g_y4, g_y5 = [x / 100.0 for x in st.session_state.growth_saved]
+    # P4 / FAR / TL feeds (new)
+    edited_p4_df, edited_p4_rm_df, p4s = st.session_state.sidebar_p4_df, st.session_state.sidebar_p4_rm_df, dict(st.session_state.p4_scalars)
+    edited_far_open_df, edited_far_add_df = st.session_state.sidebar_far_open_df, st.session_state.sidebar_far_add_df
+    edited_tl_df, bank_chg_pct = st.session_state.sidebar_tl_df, st.session_state.bank_chg_saved
 
     if sidebar_context == "Sales / FG Feed":
         st.header("📊 1. Sales & FG Feed Desk")
@@ -407,7 +488,7 @@ with st.sidebar:
         g_y2, g_y3, g_y4, g_y5 = [x / 100.0 for x in st.session_state.growth_saved]
     elif sidebar_context == "Indirect Expenses Feed":
         st.header("🏢 5. Indirect Expenses Feed Desk")
-        st.caption("Initial rate - Rs per Kg sold (p.u.) or % of Sale Value, as per 'Against Sale'. Same rate for P1, P2, P3")
+        st.caption("Initial rate - Rs per Kg sold (p.u.) or % of Sale Value, as per 'Against Sale'. Same rate for P1, P2, P3, P4")
         edited_ix_df = sb_editor(st.session_state.sidebar_ix_df, hide_index=True, column_config={"Expense Head": st.column_config.TextColumn(disabled=True), "Against Sale": st.column_config.TextColumn(disabled=True)})
         st.session_state.sidebar_ix_df = edited_ix_df
         st.caption("YoY inflation (%) on rate / % - Year 2 to Year 5")
@@ -415,7 +496,7 @@ with st.sidebar:
         st.session_state.sidebar_ix_infl_df = edited_ix_infl_df
         edited_qty_df, edited_rate_df, edited_fg_inflation_df, edited_prod_params_df, edited_bom_df, edited_rm_logistics_df, edited_rm_price_df, edited_rm_inflation_df = st.session_state.sidebar_qty_df, st.session_state.sidebar_rate_df, st.session_state.sidebar_fg_inflation_df, st.session_state.sidebar_prod_params_df, st.session_state.sidebar_bom_df, st.session_state.sidebar_rm_logistics_df, st.session_state.sidebar_rm_price_df, st.session_state.sidebar_rm_inflation_df
         g_y2, g_y3, g_y4, g_y5 = [x / 100.0 for x in st.session_state.growth_saved]
-    else:
+    elif sidebar_context == "WC Feed":
         st.header("🏦 6. WC Feed Desk")
         wc_cash_open = st.number_input("Opening Bank / Cash Balance (Rs Lacs)", value=st.session_state.wc_cash_saved)
         st.session_state.wc_cash_saved = wc_cash_open
@@ -433,10 +514,52 @@ with st.sidebar:
         st.session_state.sidebar_wc_bal_df = edited_wc_bal_df
         edited_qty_df, edited_rate_df, edited_fg_inflation_df, edited_prod_params_df, edited_bom_df, edited_rm_logistics_df, edited_rm_price_df, edited_rm_inflation_df = st.session_state.sidebar_qty_df, st.session_state.sidebar_rate_df, st.session_state.sidebar_fg_inflation_df, st.session_state.sidebar_prod_params_df, st.session_state.sidebar_bom_df, st.session_state.sidebar_rm_logistics_df, st.session_state.sidebar_rm_price_df, st.session_state.sidebar_rm_inflation_df
         g_y2, g_y3, g_y4, g_y5 = [x / 100.0 for x in st.session_state.growth_saved]
+    elif sidebar_context == "P4 / New Capex Feed":
+        st.header("🆕 7. P4 / New Capex Feed Desk")
+        feed_title("P4 : Cockpit Feed & Default Figures - M1 to M12 and Year 2-5")
+        st.caption("Sale Qt before the start month is ignored. Year 2 Sale = M12 Sale x 12 x (1 + Year 2 growth). "
+                   "Year 2-5 Selling Rate = M12 rate compounded by the yearly inflation. Capex payment / installation cost: M1-M12 only.")
+        edited_p4_df = sb_editor(st.session_state.sidebar_p4_df, hide_index=True, column_config={"P4 Assumption": st.column_config.TextColumn(disabled=True)})
+        st.session_state.sidebar_p4_df = edited_p4_df
+        _ps = st.session_state.p4_scalars
+        _ps["completion"] = st.selectbox("Capex Installation & Commercial Run (completion month)", ["Auto"] + months[:11],
+                                         index=(["Auto"] + months[:11]).index(_ps["completion"]) if _ps["completion"] in ["Auto"] + months[:11] else 0,
+                                         help="Auto = month after the last capex payment. Capitalisation, production and sale start the month after completion.")
+        _ps["tl_pct"] = st.number_input("TL Sanction & Disbursement (% of capex payment)", value=float(_ps["tl_pct"]))
+        _ps["op_fg"] = st.number_input("P4 Opening FG Stock Qt (M1)", value=float(_ps["op_fg"]))
+        _ps["op_dbt"] = st.number_input("P4 Opening Debtors (Rs Lacs)", value=float(_ps["op_dbt"]))
+        _ps["dbt_days"] = st.number_input("P4 Credit Days : Debtors", value=float(_ps["dbt_days"]))
+        _ps["adv_pct"] = st.number_input("Advance to Supplier (%) - RM13-RM15", value=float(_ps["adv_pct"]))
+        _ps["crd_days"] = st.number_input("Credit Days : Creditors net of Advance - RM13-RM15", value=float(_ps["crd_days"]))
+        p4s = dict(_ps)
+        feed_title("P4 Raw Materials (RM13-RM15) - Price, Days Hold, M1 Opening Stock, Opening Creditors")
+        edited_p4_rm_df = sb_editor(st.session_state.sidebar_p4_rm_df, hide_index=True, column_config={"Raw Material": st.column_config.TextColumn(disabled=True)})
+        st.session_state.sidebar_p4_rm_df = edited_p4_rm_df
+        _p4_cockpit_auto = True                       # the Auto table (TL disbursement / own contribution) is drawn after the calculation below
+    elif sidebar_context == "FAR Feed":
+        st.header("🏗️ 8. FAR Feed Desk")
+        feed_title("Opening Asset Feed - Gross Block, Gross Dep (Rs Lacs) and Rate of Dep (% p.a.)")
+        st.caption("Opening WDV = Gross Block - Gross Dep. Depreciation is charged on closing gross block, never below nil WDV.")
+        edited_far_open_df = sb_editor(st.session_state.sidebar_far_open_df, hide_index=True, column_config={"Asset": st.column_config.TextColumn(disabled=True)})
+        st.session_state.sidebar_far_open_df = edited_far_open_df
+        feed_title("Asset Addition (Rs Lacs) - M1 to M12 and Year 2-5")
+        st.caption("Plant & Machinery (New Capex Project) is added automatically: capex + installation + interest during construction, in the start month.")
+        edited_far_add_df = sb_editor(st.session_state.sidebar_far_add_df, hide_index=True, column_config={"Asset Addition (Rs Lacs)": st.column_config.TextColumn(disabled=True)})
+        st.session_state.sidebar_far_add_df = edited_far_add_df
+    elif sidebar_context == "TL Feed":
+        st.header("🏦 9. TL Feed Desk")
+        feed_title("Term Loans - Opening O/s (M1), Interest Rate and Life Left")
+        st.caption("Life left = months from M1 (TL1-TL3) or from the start of repayment (TL New, repaid from the start month after completion). "
+                   "TL New disbursement is automatic (P4 / New Capex Feed).")
+        edited_tl_df = sb_editor(st.session_state.sidebar_tl_df, hide_index=True, column_config={"Term Loan": st.column_config.TextColumn(disabled=True)})
+        st.session_state.sidebar_tl_df = edited_tl_df
+        bank_chg_pct = st.number_input("Rate of Bank Charges (% per month, on month-end O/s of WC borrowing and TL)", value=float(st.session_state.bank_chg_saved), format="%.3f")
+        st.session_state.bank_chg_saved = bank_chg_pct
 # -----------------------------------------------------------------------------
 # CHAPTER 3: ANALYTICAL COMPUTATION LAYER
 # -----------------------------------------------------------------------------
 qty_matrix, rate_matrix, rev_matrix = {}, {}, {}
+
 prod_sales_matrix, fg_cl_matrix, fg_op_matrix, fg_prod_matrix = {}, {}, {}, {}
 
 def safe_float(val):
@@ -447,45 +570,99 @@ def safe_float(val):
         return float(val)
     except: return 0.0
 
-for p in products:
-    q_months = [safe_float(edited_qty_df.loc[edited_qty_df["Timeline"] == m, p].values) for m in months]
-    p_inf_y2 = safe_float(edited_fg_inflation_df.loc[edited_fg_inflation_df["Timeline"] == "Year 2 FG Price Inflation (%)", p].values) / 100.0
-    p_inf_y3 = safe_float(edited_fg_inflation_df.loc[edited_fg_inflation_df["Timeline"] == "Year 3 FG Price Inflation (%)", p].values) / 100.0
-    p_inf_y4 = safe_float(edited_fg_inflation_df.loc[edited_fg_inflation_df["Timeline"] == "Year 4 FG Price Inflation (%)", p].values) / 100.0
-    p_inf_y5 = safe_float(edited_fg_inflation_df.loc[edited_fg_inflation_df["Timeline"] == "Year 5 FG Price Inflation (%)", p].values) / 100.0
-    r_months = [safe_float(edited_rate_df.loc[edited_rate_df["Timeline"] == m, p].values) for m in months]
-    v_months = [q * r for q, r in zip(q_months, r_months)]
-    
-    y1_q_total = sum(q_months)
-    y1_v_total = sum(v_months)
-    y1_r_weighted_avg = y1_v_total / y1_q_total if y1_q_total > 0 else 0.0
-    y1_q_avg_monthly = y1_q_total / 12.0
-    
-    base_r_y2 = safe_float(edited_rate_df.loc[edited_rate_df["Timeline"] == "Year 2", p].values)
-    base_r_y3 = safe_float(edited_rate_df.loc[edited_rate_df["Timeline"] == "Year 3", p].values)
-    base_r_y4 = safe_float(edited_rate_df.loc[edited_rate_df["Timeline"] == "Year 4", p].values)
-    base_r_y5 = safe_float(edited_rate_df.loc[edited_rate_df["Timeline"] == "Year 5", p].values)
-    
-    r_y2 = base_r_y2 * (1.0 + p_inf_y2)
-    r_y3 = base_r_y3 * (1.0 + p_inf_y2) * (1.0 + p_inf_y3)
-    r_y4 = base_r_y4 * (1.0 + p_inf_y2) * (1.0 + p_inf_y3) * (1.0 + p_inf_y4)
-    r_y5 = base_r_y5 * (1.0 + p_inf_y2) * (1.0 + p_inf_y3) * (1.0 + p_inf_y4) * (1.0 + p_inf_y5)
-    
-    y2_q = (y1_q_avg_monthly * (1 + g_y2)) * 12
-    y3_q = ((y2_q / 12.0) * (1 + g_y3)) * 12
-    y4_q = ((y3_q / 12.0) * (1 + g_y4)) * 12
-    y5_q = ((y4_q / 12.0) * (1 + g_y5)) * 12
-    
-    qty_matrix[p] = q_months + [y1_q_total, y2_q, y3_q, y4_q, y5_q]
-    rate_matrix[p] = r_months + [y1_r_weighted_avg, r_y2, r_y3, r_y4, r_y5]
-    rev_matrix[p] = v_months + [y1_v_total, (y2_q * r_y2), (y3_q * r_y3), (y4_q * r_y4), (y5_q * r_y5)]
+# ---- NEW: RM13-RM15 (P4) feeds join the RM feed tables used by the calculations; P4 debtors join the debtors feed ----
+edited_rm_logistics_df = pd.concat([edited_rm_logistics_df[edited_rm_logistics_df["Raw Material"].isin(rm_base)],
+                                    edited_p4_rm_df[["Raw Material", "M1 Initial Op Stock Qty", "Days Hold"]]], ignore_index=True)
+edited_rm_price_df = pd.concat([edited_rm_price_df[edited_rm_price_df["Raw Material"].isin(rm_base)],
+                                edited_p4_rm_df[["Raw Material", "Initial Price"]]], ignore_index=True)
+edited_op_cred_df = pd.concat([edited_op_cred_df[edited_op_cred_df["Raw Material"].isin(rm_base)],
+                               edited_p4_rm_df[["Raw Material", "Opening Creditors (Rs Lacs)"]]], ignore_index=True)
+edited_debtor_df = edited_debtor_df.copy()
+edited_debtor_df["P4"] = [safe_float(p4s.get("dbt_days", 30.0)) if r == "Days Credit" else safe_float(p4s.get("op_dbt", 0.0))
+                          for r in edited_debtor_df["Parameters"]]
 
-    m1_op_input = safe_float(edited_prod_params_df.loc[edited_prod_params_df["Parameters"] == "M1 Initial Op Stock Qty", p].values)
-    hold_days = safe_float(edited_prod_params_df.loc[edited_prod_params_df["Parameters"] == "Target Hold Days (Closing Stock)", p].values)
+# ---- NEW: P4 / New Capex timing (completion month, start of capitalisation / production / sale) ----
+_p4t = edited_p4_df.set_index("P4 Assumption")
+def p4_row(name):
+    """16 values (M1-M12, Year 2-5) of one P4 feed row."""
+    return [safe_float(_p4t.at[name, c]) if (name in _p4t.index and c in _p4t.columns) else 0.0 for c in p4_cols]
+p4_capex_pay = p4_row("New Capex Payment (Rs Lacs)")[0:12]
+p4_capex_inst = p4_row("New Capex Installation Cost (Rs Lacs)")[0:12]
+_last_pay = max([i for i in range(12) if p4_capex_pay[i] > 0] or [-1])
+p4_completion_auto = min(_last_pay + 1, 10)                                   # month after the last capex payment (0-based index)
+p4_completion_warn = ""
+if p4s.get("completion", "Auto") in months[:11]:
+    p4_completion = months.index(p4s["completion"])
+    if p4_completion < _last_pay:
+        p4_completion_warn = f"Completion month {months[p4_completion]} is before the last capex payment ({months[_last_pay]}); {months[_last_pay]} is used."
+        p4_completion = _last_pay
+else:
+    p4_completion = p4_completion_auto
+p4_start = p4_completion + 1                                                  # capitalisation, production and sale start (e.g. M8 + 1 = M9)
+p4_capex_total = sum(p4_capex_pay) + sum(p4_capex_inst)
+_tl_frac = min(max(safe_float(p4s.get("tl_pct", 85.0)), 0.0), 100.0) / 100.0
+p4_tl_disb = [(p4_capex_pay[i] + p4_capex_inst[i]) * _tl_frac for i in range(12)]          # TL New disbursement (Auto)
+p4_own = [(p4_capex_pay[i] + p4_capex_inst[i]) - p4_tl_disb[i] for i in range(12)]           # capex margin & own cash contribution (Auto)
+
+for p in products:
+    if p == "P4":
+        # P4 comes from the P4 / New Capex feed: monthly sale from the start month only, own growth, M12 run rate as the Year 2 base
+        q_months = [v if i >= p4_start else 0.0 for i, v in enumerate(p4_row("Sale Qt Projection (Kg)")[0:12])]
+        r_months = p4_row("Selling Rate (Rs/Kg)")[0:12]
+        v_months = [q * r for q, r in zip(q_months, r_months)]
+        _g = [v / 100.0 for v in p4_row("Growth % : Sale")[12:16]]
+        _inf = [v / 100.0 for v in p4_row("Selling Rate Inflation %")[12:16]]
+        y1_q_total, y1_v_total = sum(q_months), sum(v_months)
+        y_q, y_r, _q, _r = [], [], q_months[11] * 12.0, r_months[11]
+        for k in range(4):
+            _q, _r = _q * (1 + _g[k]), _r * (1 + _inf[k])
+            y_q.append(_q); y_r.append(_r)
+        qty_matrix[p] = q_months + [y1_q_total] + y_q
+        rate_matrix[p] = r_months + [(y1_v_total / y1_q_total) if y1_q_total > 0 else 0.0] + y_r
+        rev_matrix[p] = v_months + [y1_v_total] + [a * b for a, b in zip(y_q, y_r)]
+        m1_op_input = safe_float(p4s.get("op_fg", 0.0))
+        _hd = p4_row("FG Inventory Hold Days")
+        hold = _hd[0:12] + [0.0] + _hd[12:16]                                    # per period (M1-M12, -, Year 2-5)
+    else:
+        q_months = [safe_float(edited_qty_df.loc[edited_qty_df["Timeline"] == m, p].values) for m in months]
+        p_inf_y2 = safe_float(edited_fg_inflation_df.loc[edited_fg_inflation_df["Timeline"] == "Year 2 FG Price Inflation (%)", p].values) / 100.0
+        p_inf_y3 = safe_float(edited_fg_inflation_df.loc[edited_fg_inflation_df["Timeline"] == "Year 3 FG Price Inflation (%)", p].values) / 100.0
+        p_inf_y4 = safe_float(edited_fg_inflation_df.loc[edited_fg_inflation_df["Timeline"] == "Year 4 FG Price Inflation (%)", p].values) / 100.0
+        p_inf_y5 = safe_float(edited_fg_inflation_df.loc[edited_fg_inflation_df["Timeline"] == "Year 5 FG Price Inflation (%)", p].values) / 100.0
+        r_months = [safe_float(edited_rate_df.loc[edited_rate_df["Timeline"] == m, p].values) for m in months]
+        v_months = [q * r for q, r in zip(q_months, r_months)]
+    
+        y1_q_total = sum(q_months)
+        y1_v_total = sum(v_months)
+        y1_r_weighted_avg = y1_v_total / y1_q_total if y1_q_total > 0 else 0.0
+        y1_q_avg_monthly = y1_q_total / 12.0
+    
+        base_r_y2 = safe_float(edited_rate_df.loc[edited_rate_df["Timeline"] == "Year 2", p].values)
+        base_r_y3 = safe_float(edited_rate_df.loc[edited_rate_df["Timeline"] == "Year 3", p].values)
+        base_r_y4 = safe_float(edited_rate_df.loc[edited_rate_df["Timeline"] == "Year 4", p].values)
+        base_r_y5 = safe_float(edited_rate_df.loc[edited_rate_df["Timeline"] == "Year 5", p].values)
+    
+        r_y2 = base_r_y2 * (1.0 + p_inf_y2)
+        r_y3 = base_r_y3 * (1.0 + p_inf_y2) * (1.0 + p_inf_y3)
+        r_y4 = base_r_y4 * (1.0 + p_inf_y2) * (1.0 + p_inf_y3) * (1.0 + p_inf_y4)
+        r_y5 = base_r_y5 * (1.0 + p_inf_y2) * (1.0 + p_inf_y3) * (1.0 + p_inf_y4) * (1.0 + p_inf_y5)
+    
+        y2_q = (y1_q_avg_monthly * (1 + g_y2)) * 12
+        y3_q = ((y2_q / 12.0) * (1 + g_y3)) * 12
+        y4_q = ((y3_q / 12.0) * (1 + g_y4)) * 12
+        y5_q = ((y4_q / 12.0) * (1 + g_y5)) * 12
+    
+        qty_matrix[p] = q_months + [y1_q_total, y2_q, y3_q, y4_q, y5_q]
+        rate_matrix[p] = r_months + [y1_r_weighted_avg, r_y2, r_y3, r_y4, r_y5]
+        rev_matrix[p] = v_months + [y1_v_total, (y2_q * r_y2), (y3_q * r_y3), (y4_q * r_y4), (y5_q * r_y5)]
+
+        m1_op_input = safe_float(edited_prod_params_df.loc[edited_prod_params_df["Parameters"] == "M1 Initial Op Stock Qty", p].values)
+        hold_days = safe_float(edited_prod_params_df.loc[edited_prod_params_df["Parameters"] == "Target Hold Days (Closing Stock)", p].values)
+        hold = [hold_days] * 17
     
     p_sales = qty_matrix[p]
     p_op, p_cl, p_prod = [0.0] * 17, [0.0] * 17, [0.0] * 17
-    for idx in range(12): p_cl[idx] = (hold_days / 30.0) * p_sales[idx]
+    for idx in range(12): p_cl[idx] = (hold[idx] / 30.0) * p_sales[idx]
     
     # Secure arrays from assignment type breaks
     p_op_list = [0.0] * 17
@@ -497,7 +674,7 @@ for p in products:
     horizon_map, prev_map = {"Year 2": 13, "Year 3": 14, "Year 4": 15, "Year 5": 16}, {"Year 2": 12, "Year 3": 13, "Year 4": 14, "Year 5": 15}
     for yr, idx in horizon_map.items():
         p_op_list[idx] = p_cl[prev_map[yr]]
-        p_cl[idx] = (hold_days / 30.0) * (p_sales[idx] / 12.0)
+        p_cl[idx] = (hold[idx] / 30.0) * (p_sales[idx] / 12.0)
         p_prod[idx] = p_sales[idx] + p_cl[idx] - p_op_list[idx]
     prod_sales_matrix[p], fg_cl_matrix[p], fg_op_matrix[p], fg_prod_matrix[p] = p_sales, p_cl, p_op_list, p_prod
 
@@ -659,7 +836,7 @@ df_rm_purchase_final = compile_report(rm_purch_matrix, "Raw Material")
 df_rm_loss_final = compile_report(rm_total_loss_matrix, "Raw Material")
 
 df_scrap_final = pd.DataFrame(fg_scrap_matrix, index=display_columns).T
-df_scrap_final.insert(0, "Scrap (Qt)", ["Scrap P1 (SP1)", "Scrap P2 (SP2)", "Scrap P3 (SP3)"])
+df_scrap_final.insert(0, "Scrap (Qt)", [f"Scrap {p} (S{p})" for p in products])
 t_scrap_row = {"Scrap (Qt)": "Total"}
 for col in display_columns: t_scrap_row[col] = df_scrap_final[col].sum()
 df_scrap_final = pd.concat([df_scrap_final, pd.DataFrame([t_scrap_row])], ignore_index=True)
@@ -811,10 +988,13 @@ dbt = {p: credit_schedule(dbt_due[p], dbt_days[p], dbt_open[p]) for p in product
 crd_gst = {rm: [v * safe_float(gst_pur_pct) / 100.0 for v in rm_purch_val_matrix[rm]] for rm in raw_materials}
 crd_gross = {rm: [a + b for a, b in zip(rm_purch_val_matrix[rm], crd_gst[rm])] for rm in raw_materials}       # Gross Due = Purchase + GST
 _adv_frac = min(max(safe_float(adv_pct), 0.0), 100.0) / 100.0
-crd_adv = {rm: [v * _adv_frac for v in crd_gross[rm]] for rm in raw_materials}                               # Advance paid at order = Adv % x Gross Due
+_adv_frac_p4 = min(max(safe_float(p4s.get("adv_pct", 10.0)), 0.0), 100.0) / 100.0        # RM13-RM15 (P4) have their own advance % and credit days
+crd_adv_frac = {rm: (_adv_frac_p4 if rm in p4_rms else _adv_frac) for rm in raw_materials}
+crd_days_rm = {rm: (safe_float(p4s.get("crd_days", 35.0)) if rm in p4_rms else safe_float(rm_credit_days)) for rm in raw_materials}
+crd_adv = {rm: [v * crd_adv_frac[rm] for v in crd_gross[rm]] for rm in raw_materials}                       # Advance paid at order = Adv % x Gross Due
 crd_due = {rm: [g - a for g, a in zip(crd_gross[rm], crd_adv[rm])] for rm in raw_materials}                  # Net Due to Suppliers = Gross Due - Advance (credit days apply on this)
 crd_open = {rm: safe_float(edited_op_cred_df.loc[edited_op_cred_df["Raw Material"] == rm, "Opening Creditors (Rs Lacs)"].values) for rm in raw_materials}
-crd = {rm: credit_schedule(crd_due[rm], safe_float(rm_credit_days), crd_open[rm]) for rm in raw_materials}
+crd = {rm: credit_schedule(crd_due[rm], crd_days_rm[rm], crd_open[rm]) for rm in raw_materials}
 # Cash outflow has 2 types: (a) advance on the current purchase, (b) payment against creditors (Opening + Net Due - Closing)
 crd_out_total = {rm: [a + b for a, b in zip(crd_adv[rm], crd[rm]["flow"])] for rm in raw_materials}
 
@@ -834,6 +1014,125 @@ def creditor_flow_df():
                            ("5", "Cash Outflow (b) : Payment against Creditors (1+2-3)", {r: crd[r]["flow"] for r in raw_materials}),
                            ("6", "Total Cash Outflow (a+b)", crd_out_total)], raw_materials)
 
+# ---- NEW: TERM LOANS (TL page) : run month by month for 60 months (M1-M60), then rolled up to M1-M12, Year 1-5 (Rs lacs) ----
+# Repayment = equal principal : opening O/s / months of life remaining (so each loan is fully repaid at the end of its life).
+# TL1-TL3 repay from M1 ; TL New is interest-only until completion and repays from the start month (after completion) over its life.
+# Interest = opening O/s x rate / 12. Bank charges = month-end (closing) O/s x rate of bank charges (% per month).
+# Interest on TL New up to the completion month = interest during construction : capitalised into the new Plant & Machinery, not charged to PL.
+_bc_rate = safe_float(bank_chg_pct) / 100.0                                  # per month
+_tlf = edited_tl_df.set_index("Term Loan")
+def _tl_feed(n, c): return safe_float(_tlf.at[n, c]) if (n in _tlf.index and c in _tlf.columns) else 0.0
+TLH = 60
+tl_m = {}
+for n in tl_names:
+    disb = [0.0] * TLH
+    if n == "TL New": disb[0:12] = p4_tl_disb
+    rate, life = _tl_feed(n, "Interest Rate (% p.a.)") / 100.0, int(round(_tl_feed(n, "Life Left (Months)")))
+    rep_start = p4_start if n == "TL New" else 0
+    bal = _tl_feed(n, "Opening O/s M1 (Rs Lacs)")
+    rec = {k: [0.0] * TLH for k in ("op", "disb", "rep", "int", "cl", "bc")}
+    for m in range(TLH):
+        op = bal
+        intr = op * rate / 12.0
+        rep = 0.0
+        if m >= rep_start and op > 0:
+            remaining = life - (m - rep_start)
+            rep = op / remaining if remaining > 0 else op
+        rep = min(rep, op)
+        cl = op + disb[m] - rep
+        rec["op"][m], rec["disb"][m], rec["rep"][m], rec["int"][m], rec["cl"][m], rec["bc"][m] = op, disb[m], rep, intr, cl, cl * _bc_rate
+        bal = cl
+    tl_m[n] = rec
+
+def _roll(series, kind):
+    """60 monthly values -> 17 columns. flow : Year = sum of its 12 months ; op : Year = first month ; cl : Year = last month."""
+    out = series[0:12]
+    for y in range(5):
+        blk = series[12 * y: 12 * y + 12]
+        out = out + [sum(blk) if kind == "flow" else (blk[0] if kind == "op" else blk[-1])]
+    return out[0:12] + [out[12]] + out[13:17]
+tl = {n: {"op": _roll(tl_m[n]["op"], "op"), "disb": _roll(tl_m[n]["disb"], "flow"), "rep": _roll(tl_m[n]["rep"], "flow"),
+          "int": _roll(tl_m[n]["int"], "flow"), "cl": _roll(tl_m[n]["cl"], "cl"), "bc": _roll(tl_m[n]["bc"], "flow")} for n in tl_names}
+for n in tl_names: tl[n]["inst"] = [a + b for a, b in zip(tl[n]["rep"], tl[n]["int"])]          # TL instalment (repay + interest) = cash outflow
+_idc_m = [tl_m["TL New"]["int"][m] if m <= p4_completion else 0.0 for m in range(TLH)]
+tl_idc_series = _roll(_idc_m, "flow")                                         # interest during construction (capitalised)
+tl_idc = sum(_idc_m)
+tl_int_pl = {n: ([a - b for a, b in zip(tl[n]["int"], tl_idc_series)] if n == "TL New" else tl[n]["int"]) for n in tl_names}   # charged to PL
+tl_int_tot = [sum(tl[n]["int"][i] for n in tl_names) for i in range(17)]
+tl_bc_tot = [sum(tl[n]["bc"][i] for n in tl_names) for i in range(17)]
+
+def tl_tables():
+    """The TL page tables: (heading, dataframe) - one row per loan plus Total, as in the TL sheet."""
+    out = []
+    for head, key in (("1. Opening O/s", "op"), ("2. Disbursement", "disb"), ("3. Repayment", "rep"), ("4. TL Interest", "int"),
+                      ("5. Bank Charges on TL", "bc"), ("6. TL Closing O/s", "cl"), ("7. TL Total Instalment (Repay + Int) : Cash Outflow", "inst")):
+        d = compile_report({n: tl[n][key] for n in tl_names}, "Term Loan")
+        if key == "int":
+            memo = [{"Term Loan": "of which : Interest during Construction (TL New, capitalised)", **dict(zip(display_columns, tl_idc_series))},
+                    {"Term Loan": "Interest on TL charged to PL", **dict(zip(display_columns, [sum(tl_int_pl[n][i] for n in tl_names) for i in range(17)]))}]
+            d = pd.concat([d, pd.DataFrame(memo)], ignore_index=True)
+        out.append((head, d))
+    return out
+
+# ---- NEW: FIXED ASSET REGISTER (FAR page) (Rs lacs) ----
+# Closing gross = opening + addition ; depreciation (straight line) = closing gross x rate / 12 per month (a full month in the month of addition),
+# Year 2-5 = closing gross x rate ; Year 1 = sum of months ; depreciation stops once WDV reaches nil.
+# Plant & Machinery is shown as one row; the new capex project (P4) is run as its own ledger so that its depreciation can be charged to P4.
+_fo = edited_far_open_df.set_index("Asset")
+_fa = edited_far_add_df.set_index("Asset Addition (Rs Lacs)")
+def _far_feed(a, c): return safe_float(_fo.at[a, c]) if (a in _fo.index and c in _fo.columns) else 0.0
+def _add_series(row):
+    v = [safe_float(_fa.at[row, c]) if (row in _fa.index and c in _fa.columns) else 0.0 for c in p4_cols]
+    return v[0:12] + [sum(v[0:12])] + v[12:16]
+p4_asset_value = p4_capex_total + tl_idc                                        # new P&M capitalised = capex + installation + interest during construction
+_new_add = [0.0] * 17
+_new_add[p4_start] = p4_asset_value
+_new_add[12] = p4_asset_value
+
+def _ledger(g0, a0, rate, add):
+    r = {k: [0.0] * 17 for k in ("op_g", "add", "cl_g", "op_a", "dep", "cl_a")}
+    g, a = g0, a0
+    for t in range(12):
+        r["op_g"][t], r["op_a"][t], r["add"][t] = g, a, add[t]
+        cg = g + add[t]
+        dep = max(0.0, min(cg * rate / 12.0, cg - a))
+        r["cl_g"][t], r["dep"][t], r["cl_a"][t] = cg, dep, a + dep
+        g, a = cg, a + dep
+    r["op_g"][12], r["op_a"][12], r["add"][12] = g0, a0, sum(add[0:12])
+    r["cl_g"][12], r["dep"][12], r["cl_a"][12] = r["cl_g"][11], sum(r["dep"][0:12]), r["cl_a"][11]
+    g, a = r["cl_g"][11], r["cl_a"][11]
+    for t in range(13, 17):
+        r["op_g"][t], r["op_a"][t], r["add"][t] = g, a, add[t]
+        cg = g + add[t]
+        dep = max(0.0, min(cg * rate, cg - a))
+        r["cl_g"][t], r["dep"][t], r["cl_a"][t] = cg, dep, a + dep
+        g, a = cg, a + dep
+    r["op_w"] = [x - y for x, y in zip(r["op_g"], r["op_a"])]
+    r["cl_w"] = [x - y for x, y in zip(r["cl_g"], r["cl_a"])]
+    return r
+
+far = {}
+for a in asset_classes:
+    rate = _far_feed(a, "Rate of Dep (%)") / 100.0
+    add = _add_series("Plant & Machinery (Regular)" if a == "Plant & Machinery" else a)
+    far[a] = _ledger(_far_feed(a, "Gross Block (Rs Lacs)"), _far_feed(a, "Gross Dep (Rs Lacs)"), rate, add)
+far_new = _ledger(0.0, 0.0, _far_feed("Plant & Machinery", "Rate of Dep (%)") / 100.0, _new_add)   # P&M (New Capex Project) - P4
+far_show = {a: ({k: [x + y for x, y in zip(far[a][k], far_new[k])] for k in far[a]} if a == "Plant & Machinery" else far[a]) for a in asset_classes}
+dep_total = [sum(far_show[a]["dep"][i] for a in asset_classes) for i in range(17)]
+dep_new = far_new["dep"]                                                        # charged to P4 only
+dep_other = [a - b for a, b in zip(dep_total, dep_new)]                         # shared P1-P4 on COGS
+
+def far_tables():
+    out = []
+    for head, key in (("1. Opening Gross Block", "op_g"), ("2. Addition", "add"), ("3. Closing Gross Block", "cl_g"),
+                      ("4. Depreciation : Opening (Accumulated)", "op_a"), ("5. Depreciation : Current", "dep"),
+                      ("6. Depreciation : Closing (Accumulated)", "cl_a"), ("7. Opening WDV", "op_w"), ("8. Closing WDV", "cl_w")):
+        d = compile_report({a: far_show[a][key] for a in asset_classes}, "Asset")
+        if key in ("add", "dep"):
+            d = pd.concat([d, pd.DataFrame([{"Asset": "of which : Plant & Machinery (New Capex Project - P4)", **dict(zip(display_columns, far_new[key]))}])], ignore_index=True)
+        out.append((head, d))
+    return out
+
 # ---- NEW: WORKING CAPITAL (WC page) : requirement, drawing power, borrowing and interest (Rs lacs) ----
 def _feed_series(df, col, kind):
     """17 values (M1-M12, Year 1, Year 2-5) from a WC feed table keyed by Timeline. flow : Year 1 = sum of months ; bal : Year 1 = M12 value."""
@@ -848,7 +1147,7 @@ wc_power  = [sum(dx_cost["Power & Fuel"][p][i] for p in products) for i in _I]
 wc_labour = [sum(dx_cost["Direct Wages"][p][i] for p in products) for i in _I]
 wc_othmfg = [sum(dx_cost[h][p][i] for h in ("Repair & Maintenance", "Carriage inward", "Other Direct OH") for p in products) for i in _I]
 wc_selladm = [sum(ix_total_cost[p][i] for p in products) for i in _I]
-wc_tlint  = _feed_series(edited_wc_flow_df, "TL Interest & Bank Charges", "flow")
+wc_tlint  = [tl_int_tot[i] + tl_bc_tot[i] for i in _I]                                            # TL interest (incl. during construction) + TL bank charges : TL page
 wc_fd     = _feed_series(edited_wc_flow_df, "FD Increment", "flow")
 wc_tax    = _feed_series(edited_wc_flow_df, "Tax Payment Provision", "flow")
 wc_cont   = _feed_series(edited_wc_flow_df, "Other Contingency Requirement", "flow")
@@ -894,6 +1193,10 @@ _roi = safe_float(wc_roi) / 100.0
 wc_int = [wc_fin[t] * _roi / 12.0 for t in range(12)]
 wc_int.append(sum(wc_int[0:12]))                                         # Year 1 = sum of months
 for _i in range(13, 17): wc_int.append((wc_od_op[_i] + wc_fin[_i]) / 2.0 * _roi)   # Year 2-5 = rate x average of opening and closing borrowing
+# NEW: bank charges on WC = month-end borrowing x rate of bank charges (% per month) ; Year 1 = sum ; Year 2-5 = 12 x rate x average of opening and closing borrowing
+wc_bc = [max(wc_fin[t], 0.0) * _bc_rate for t in range(12)]
+wc_bc.append(sum(wc_bc[0:12]))
+for _i in range(13, 17): wc_bc.append(max((wc_od_op[_i] + wc_fin[_i]) / 2.0, 0.0) * _bc_rate * 12.0)
 
 def _wc_df(spec, head):
     """spec rows = (Sl No, label, series or None, bold). Returns the table and the list of bold flags."""
@@ -930,6 +1233,7 @@ def wc_dp_df():
             ("", "Less : Working Capital Requirement", wc_req, False), ("", "Less : Opening OD/CC Bal", wc_od_op, False),
             ("6", "Total Proposed Borrowing", wc_prop, True), ("7", "DP SURPLUS / (SHORTFALL) (5-6)", wc_sur, True),
             ("8", "FINAL BORROWING (Lower of 5 or 6)", wc_fin, True), ("9", "Int on Work Cap", wc_int, True),
+            ("10", "Bank Charges on WC", wc_bc, True),
             ("", "Memo : Closing Cash / (Unfunded Gap)", wc_cash_cl, False)]
     return _wc_df(spec, "Drawing Power, Borrowing & Interest on Working Capital")
 
@@ -939,17 +1243,35 @@ def show_wc_df(df_bold):
            .apply(lambda r: ["font-weight: bold" if bold[r.name] else ""] * len(r), axis=1))
     st.dataframe(sty, use_container_width=True, hide_index=True, height=35 * (len(df) + 1) + 3)
 
-# ---- Hierarchical P&L compiler (20 Sl Nos, Level 1 - Level 4). Same function serves "All" and a single product ----
+# ---- Hierarchical P&L compiler (16 Sl Nos, Level 1 - Level 4). Same function serves "All" and a single product ----
 pct_of = lambda n, d: [(a / b * 100.0 if b > 0 else 0.0) for a, b in zip(n, d)]
 per_unit = lambda n, d: [(a * 100000.0 / b if b > 0 else 0.0) for a, b in zip(n, d)]       # Rs lacs / Qt -> Rs per Kg
 
-# ---- NEW: interest on working capital shared between P1-P3 on each product's COGS (monthly; Year 1 = sum of months) ----
+# ---- NEW: interest on working capital shared between P1-P4 on each product's COGS (monthly; Year 1 = sum of months) ----
 _cogs_glob = {p: [rm_cons_val_p_total[p][i] + fg_adj[p][i] + dx_total_cost[p][i] + ix_total_cost[p][i] for i in range(17)] for p in products}
 wc_int_p = {p: [0.0] * 17 for p in products}
 for _i in list(range(12)) + [13, 14, 15, 16]:
     _tot = sum(_cogs_glob[p][_i] for p in products)
     for p in products: wc_int_p[p][_i] = (wc_int[_i] * _cogs_glob[p][_i] / _tot) if _tot > 0 else 0.0
 for p in products: wc_int_p[p][12] = sum(wc_int_p[p][0:12])
+
+def alloc_on_cogs(series):
+    """Share a company-level series between P1-P4 on each product's COGS (monthly; Year 1 = sum of months; equal split if no COGS)."""
+    out = {p: [0.0] * 17 for p in products}
+    for i in list(range(12)) + [13, 14, 15, 16]:
+        tot = sum(_cogs_glob[p][i] for p in products)
+        for p in products: out[p][i] = (series[i] * _cogs_glob[p][i] / tot) if tot > 0 else series[i] / len(products)
+    for p in products: out[p][12] = sum(out[p][0:12])
+    return out
+def only_p4(series):
+    return {p: (list(series) if p == "P4" else [0.0] * 17) for p in products}
+def _add_p(a, b): return {p: [x + y for x, y in zip(a[p], b[p])] for p in products}
+
+# ---- NEW: Depreciation (FAR page) : new P&M -> P4 ; rest shared on COGS.  Finance costs : TL New interest / bank charges -> P4 ; rest on COGS ----
+dep_p = _add_p(alloc_on_cogs(dep_other), only_p4(dep_new))
+tl_int_p = _add_p(alloc_on_cogs([sum(tl_int_pl[n][i] for n in ("TL1", "TL2", "TL3")) for i in range(17)]), only_p4(tl_int_pl["TL New"]))
+bc_p = _add_p(alloc_on_cogs([wc_bc[i] + sum(tl[n]["bc"][i] for n in ("TL1", "TL2", "TL3")) for i in range(17)]), only_p4(tl["TL New"]["bc"]))
+fin_p = {p: [wc_int_p[p][i] + tl_int_p[p][i] + bc_p[p][i] for i in range(17)] for p in products}
 
 def build_pl(sel):
     """Value table of the PL (Rs lacs / Qt). Each row also carries _prod (product the row belongs to, for the % and per-Kg tables) and
@@ -1054,8 +1376,16 @@ def build_pl(sel):
     eb_p = {p: [rev_lacs_p[p][i] - cogs_p[p][i] for i in range(17)] for p in products}
     head("11", "COGS (8+10)", lambda p: cogs_p[p])
     head("12", "EBIDTA (3-11)", lambda p: eb_p[p])
-    head("13", "Interest on Working Capital (WC page)", lambda p: wc_int_p[p])
-    head("14", "PBT (12-13)", lambda p: [eb_p[p][i] - wc_int_p[p][i] for i in range(17)])
+    # 13-16 (NEW) : Depreciation (FAR page), EBIT (12-13), Finance Costs (WC interest + TL interest + bank charges), PBT (14-15)
+    ebit_p = {p: [eb_p[p][i] - dep_p[p][i] for i in range(17)] for p in products}
+    head("13", "Depreciation (FAR page)", lambda p: dep_p[p])
+    head("14", "EBIT (12-13)", lambda p: ebit_p[p])
+    add("15", "15", "L1", "Finance Costs", "", "", "", S(lambda p: fin_p[p]))
+    for _lbl, _src in (("Interest on Working Capital (WC page)", wc_int_p), ("Interest on Term Loan (TL page)", tl_int_p),
+                       ("Bank Charges (WC + TL)", bc_p)):
+        add("", "15", "L2", "", _lbl, "", "", S(lambda p: _src[p]))
+        for p in prods: add("", "15", "L3", "", "", p, "", _src[p], prod=p)
+    head("16", "PBT (14-15)", lambda p: [ebit_p[p][i] - fin_p[p][i] for i in range(17)])
     return pd.DataFrame(rows)
 
 def derive_pl(df, sel, kind):
@@ -1086,7 +1416,7 @@ PL_PU = {s: derive_pl(d, s, "pu") for s, d in PL_VAL.items()}
 def title_with_slicer(title, key):
     c_title, c_slicer = st.columns([6, 1.3], vertical_alignment="center")
     with c_title: st.title(title)
-    with c_slicer: return st.selectbox("Product", ["All", "P1", "P2", "P3"], key=key, label_visibility="collapsed", format_func=lambda x: f"Product : {x}")
+    with c_slicer: return st.selectbox("Product", ["All"] + products, key=key, label_visibility="collapsed", format_func=lambda x: f"Product : {x}")
 
 def pick_matrix(df_all, matrix, sel, key="Product"):
     return df_all if sel == "All" else compile_report({sel: matrix[sel]}, key)
@@ -1148,7 +1478,7 @@ def ix_tables(cost_by_p, sel):
 # -----------------------------------------------------------------------------
 # CHAPTER 5: TOP PANEL NAVIGATION ROUTER & WORKSPACE VIEWPORTS
 # -----------------------------------------------------------------------------
-page_tab5, page_tab1, page_tab2, page_tab3, page_tab4, page_tab_dx, page_tab_ix, page_tab_cost, page_tab_wc = st.tabs(["PL", "Revenue", "FG", "RM Qt", "RM Val", "Direct Expenses", "Indirect Expenses", "Costing", "WC"])
+page_tab5, page_tab1, page_tab2, page_tab3, page_tab4, page_tab_dx, page_tab_ix, page_tab_cost, page_tab_wc, page_tab_far, page_tab_tl = st.tabs(["PL", "Revenue", "FG", "RM Qt", "RM Val", "Direct Expenses", "Indirect Expenses", "Costing", "WC", "FAR", "TL"])
 
 # (Streamlit tabs are client-side only, so the sidebar radio is synced by the script in CHAPTER 7.)
 
@@ -1213,10 +1543,10 @@ with page_tab4:
     st.dataframe(pick_rm(sel4, df_rm_cl_val_final, rm_cl_val_p).style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
     st.subheader("7. Due to Suppliers (Rs in Lacs)")
     st.caption(f"RM-wise, all products combined (the Product slicer does not apply).  Gross Due = Purchase + Purchase x GST ({safe_float(gst_pur_pct):g}% on purchases).  "
-               f"Advance {_adv_frac * 100:g}% of Gross Due is paid at order; Net Due to Suppliers = Gross Due - Advance")
+               f"Advance {_adv_frac * 100:g}% of Gross Due is paid at order (RM13-RM15 / P4 : {_adv_frac_p4 * 100:g}%); Net Due to Suppliers = Gross Due - Advance")
     show_block_df(creditor_due_df())
     st.subheader("8. Creditors Flow & Cash Outflow Movement Forecast (Rs in Lacs)")
-    st.caption(f"RM-wise, all products combined.  Credit period {safe_float(rm_credit_days):g} days for all RMs, applied on Net Due.  "
+    st.caption(f"RM-wise, all products combined.  Credit period {safe_float(rm_credit_days):g} days for RM1-RM12 and {crd_days_rm['RM13']:g} days for RM13-RM15 (P4), applied on Net Due.  "
                "Cash outflow (a) = advance on current purchase ; (b) = Opening Creditors + Net Due - Closing Creditors (balance paid as per credit days)")
     show_block_df(creditor_flow_df())
 
@@ -1269,7 +1599,8 @@ with page_tab_cost:
 def render_pl_tree(master_pl, sfx=""):
     """One PL tree table with its own +/- expansion state (sfx keeps the three PL tables independent)."""
     # ---- 1. Describe the tree: for every master row -> node key, parent chain, has-children ----
-    master_pl = (df_pl_master_raw if sel_pl == "All" else df_pl_by_prod[sel_pl]).reset_index(drop=True)
+    # (FIX: the table passed in is used as it is - Value, % against Sales or Cost per Kg; it was previously overwritten by the Value table)
+    master_pl = master_pl.reset_index(drop=True)
     node_info = []                       # same order as master_pl
     cur_l1, cur_l2, cur_l3 = None, None, None
     for i in range(len(master_pl)):
@@ -1391,15 +1722,53 @@ with page_tab_wc:
     st.caption("Company level (all products, all RMs) - the Product slicer does not apply.  Rs in Lacs.")
     st.subheader("1. Working Capital Requirement (Rs in Lacs)")
     st.caption("Cash Outflow - Cash Inflow - Cash & Bank Balance.  RM advance and payment to creditors come from the RM Val page, Power / labour / other mfg expenses from Direct Expenses, "
-               "Selling and admn OH from Indirect Expenses, sale receipts from the Debtors cash flow (Revenue page).  Cash & Bank Balance = opening feed in M1, then the previous period's closing cash.")
+               "Selling and admn OH from Indirect Expenses, TL interest & bank charges from the TL page, sale receipts from the Debtors cash flow (Revenue page).  Cash & Bank Balance = opening feed in M1, then the previous period's closing cash.")
     show_wc_df(wc_req_df())
     st.subheader("2. Drawing Power, Borrowing & Interest on Working Capital (Rs in Lacs)")
     st.caption(f"Margin {_mpct * 100:g}% on Working Capital Gap; DP = maximum permissible borrowing.  Total Proposed Borrowing = Working Capital Requirement + Opening OD/CC (M1 = feed, then previous month's Final Borrowing).  "
-               f"Final Borrowing = Proposed Borrowing if DP covers it, else DP.  Interest = Final Borrowing x {safe_float(wc_roi):g}% / 12 (Year 1 = sum of months; Year 2-5 = rate x average of opening and closing borrowing); it flows to the PL page below EBIDTA.")
+               f"Final Borrowing = Proposed Borrowing if DP covers it, else DP.  Interest = Final Borrowing x {safe_float(wc_roi):g}% / 12 (Year 1 = sum of months; Year 2-5 = rate x average of opening and closing borrowing).  Bank Charges on WC = month-end Final Borrowing x {safe_float(bank_chg_pct):g}% per month (TL Feed).  "
+               "Both flow to the PL page under Finance Costs, below EBIT.")
     _short = [display_columns[i] for i in range(17) if wc_sur[i] < 0]
     if _short:
         st.warning("DP shortfall (borrowing needed is above Drawing Power) in: " + ", ".join(_short) + ".  The unfunded gap is carried forward as negative cash.")
     show_wc_df(wc_dp_df())
+
+
+with page_tab_far:
+    st.title("Fixed Asset Register (FAR)")
+    st.caption(f"Company level - Rs in Lacs.  Depreciation (straight line) = closing gross block x rate / 12 per month (Year 2-5 : x rate), never below nil WDV.  "
+               f"Plant & Machinery includes the new capex project (P4) capitalised in {display_columns[p4_start]} at {p4_asset_value:,.2f} L "
+               f"(capex {p4_capex_total:,.2f} L + interest during construction {tl_idc:,.2f} L).  "
+               "Depreciation on the new P&M is charged to P4; the rest is shared P1-P4 on COGS (PL page, below EBIDTA).")
+    _fmt_far = {c: "{:,.2f} L" for c in display_columns}
+    for _h, _d in far_tables():
+        st.subheader(_h)
+        st.dataframe(_d.style.format(_fmt_far).apply(lambda r: ["font-weight: bold" if r["Asset"] == "Total" else ""] * len(r), axis=1),
+                     use_container_width=True, hide_index=True, height=35 * (len(_d) + 1) + 3)
+
+with page_tab_tl:
+    st.title("Term Loan (TL)")
+    st.caption(f"Rs in Lacs.  Repayment = opening O/s / months of life remaining (equal principal).  Interest = opening O/s x rate / 12.  "
+               f"TL New : disbursed {_tl_frac * 100:g}% of each capex payment, interest only up to completion ({months[p4_completion]}), repaid from {display_columns[p4_start]}; "
+               f"its interest up to completion ({tl_idc:,.2f} L) is capitalised into the new Plant & Machinery.  "
+               f"Bank charges = month-end O/s x {safe_float(bank_chg_pct):g}% per month.  Year 1 = M1-M12; Year 2-5 = sum of their 12 months.")
+    _fmt_tl = {c: "{:,.2f} L" for c in display_columns}
+    for _h, _d in tl_tables():
+        st.subheader(_h)
+        st.dataframe(_d.style.format(_fmt_tl).apply(lambda r: ["font-weight: bold" if r["Term Loan"] == "Total" else ""] * len(r), axis=1),
+                     use_container_width=True, hide_index=True, height=35 * (len(_d) + 1) + 3)
+
+# P4 / New Capex Feed desk : Auto rows (calculated, not editable) and timing, shown under the P4 feed boxes
+if _p4_cockpit_auto:
+    with st.sidebar:
+        feed_title("Auto : TL Disbursement & Own Contribution (Rs Lacs), M1-M12")
+        st.dataframe(pd.DataFrame([{"Auto": "TL Sanction & Disbursement", **dict(zip(months, p4_tl_disb))},
+                                   {"Auto": "Capex Margin & Own Cash Contribution", **dict(zip(months, p4_own))}]).style.format({m: "{:,.2f}" for m in months}),
+                     hide_index=True, use_container_width=True)
+        st.caption(f"Completion : {months[p4_completion]} {'(Auto)' if p4s.get('completion', 'Auto') == 'Auto' else ''}  |  "
+                   f"Capitalisation, production & sale start : {display_columns[p4_start]}  |  New P&M capitalised : {p4_asset_value:,.2f} L "
+                   f"(incl. interest during construction {tl_idc:,.2f} L)")
+        if p4_completion_warn: st.warning(p4_completion_warn)
 
 # -----------------------------------------------------------------------------
 # CHAPTER 6: GLOBAL EXCEL PIPELINE COMPILER DOWNSTREAM EXPORTER
@@ -1451,6 +1820,16 @@ else:
         creditor_flow_df().to_excel(writer, sheet_name="Creditors & Cash Outflow", index=False)
         wc_req_df()[0].to_excel(writer, sheet_name="WC Requirement", index=False)
         wc_dp_df()[0].to_excel(writer, sheet_name="WC Borrowing & Interest", index=False)
+        _r = 0
+        for _h, _d in far_tables():
+            pd.DataFrame([{"Asset": _h}]).to_excel(writer, sheet_name="FAR", index=False, header=False, startrow=_r)
+            _d.to_excel(writer, sheet_name="FAR", index=False, startrow=_r + 1)
+            _r += len(_d) + 4
+        _r = 0
+        for _h, _d in tl_tables():
+            pd.DataFrame([{"Term Loan": _h}]).to_excel(writer, sheet_name="TL", index=False, header=False, startrow=_r)
+            _d.to_excel(writer, sheet_name="TL", index=False, startrow=_r + 1)
+            _r += len(_d) + 4
 
     st.download_button(
         label="📥 Download Updated Comprehensive Interconnected Workbook",
@@ -1472,7 +1851,8 @@ components.html(r"""
         const P = window.parent, doc = P.document;
         const MAP = {"Revenue": "Sales / FG Feed", "FG": "Sales / FG Feed",
                      "RM Qt": "RM Qt Feed", "RM Val": "RM Val Feed", "Direct Expenses": "Direct Expenses Feed",
-                     "Indirect Expenses": "Indirect Expenses Feed", "WC": "WC Feed", "PL": "RM Val Feed"};
+                     "Indirect Expenses": "Indirect Expenses Feed", "WC": "WC Feed", "PL": "RM Val Feed",
+                     "FAR": "FAR Feed", "TL": "TL Feed"};
         const norm = s => (s || "").replace(/\s+/g, " ").trim();
         const selectedTab = () => {
             const t = doc.querySelector('[role="tab"][aria-selected="true"]');
