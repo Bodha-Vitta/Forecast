@@ -18,7 +18,7 @@ st.markdown("""
     div[data-testid="stVerticalBlock"] { gap: 0.5rem !important; }
     hr { border-color: #D4AF37 !important; margin: 0.5rem 0 !important; }
 
-    /* Navigation tabs: same blue as the cockpit, bright-gold text, accent bar on the left (gold = default, red = selected) */
+    /* Navigation tabs: same blue as the cockpit, bright-gold text + gold left accent bar (default); red text + red left bar (selected). No underline */
     div[data-testid="stTabs"] {
         position: sticky !important; top: 0px !important; background-color: #F6F4EC !important;
         z-index: 9999 !important; padding-top: 4px !important; padding-bottom: 6px !important;
@@ -27,13 +27,12 @@ st.markdown("""
         background: #00294A !important; border: none !important; border-radius: 8px !important;
         padding: 6px 10px !important; gap: 10px !important;
     }
-    .stApp button[role="tab"] { background: transparent !important; border-radius: 4px !important; border-left: 4px solid #D4AF37 !important; box-shadow: none !important; padding: 6px 14px !important; }
-    .stApp button[role="tab"], .stApp button[role="tab"] *, .stApp button[role="tab"] p { color: #FFD24C !important; font-weight: 700 !important; }
-    .stApp button[role="tab"]:hover { background: rgba(255,210,76,0.12) !important; }
-    .stApp button[role="tab"][aria-selected="true"] { background: #0B3D6B !important; border-left: 4px solid #E53935 !important; box-shadow: inset 0 -3px 0 #E53935 !important; }
-    .stApp button[role="tab"][aria-selected="true"], .stApp button[role="tab"][aria-selected="true"] *, .stApp button[role="tab"][aria-selected="true"] p { color: #FF5252 !important; }
-    div[data-baseweb="tab-highlight"] { display: none !important; }
-    div[data-baseweb="tab-border"] { background-color: transparent !important; }
+    .stApp [role="tab"] { background: transparent !important; border-radius: 4px !important; border: none !important; border-left: 4px solid #D4AF37 !important; box-shadow: none !important; padding: 6px 14px !important; }
+    .stApp [role="tab"], .stApp [role="tab"] *, .stApp [role="tab"] p { color: #FFD24C !important; font-weight: 700 !important; }
+    .stApp [role="tab"]:hover { background: rgba(255,210,76,0.12) !important; }
+    .stApp [role="tab"][aria-selected="true"] { background: #0B3D6B !important; border-left: 4px solid #E53935 !important; }
+    .stApp [role="tab"][aria-selected="true"], .stApp [role="tab"][aria-selected="true"] *, .stApp [role="tab"][aria-selected="true"] p { color: #FF5252 !important; }
+    div[data-baseweb="tab-highlight"], div[data-baseweb="tab-border"] { display: none !important; }
 
     /* Headings (explicit line-height + bottom space so a heading never sits under the table below it) */
     .stApp h1 { color: #00294A !important; font-size: 1.8rem !important; padding: 0 0 0.1rem 0 !important; margin: 0 !important; border-bottom: 3px solid #D4AF37; display: inline-block; }
@@ -59,7 +58,7 @@ st.markdown("""
     section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2, section[data-testid="stSidebar"] h3 { color: #D4AF37 !important; border-left: none !important; padding-left: 0 !important; }
     section[data-testid="stSidebar"] label p, section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p { color: #F1DE9C !important; }
     section[data-testid="stSidebar"] hr { border-color: #D4AF37 !important; }
-    section[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] { align-items: center !important; }
+    section[data-testid="stSidebar"] h2 { margin-top: 0.9rem !important; }
     section[data-testid="stSidebar"] div[data-testid="stCaptionContainer"] { margin: 0.3rem 0 0.5rem 0 !important; }
     /* heading card above every feed box */
     .feed-title { color: #FFD24C; font-weight: 700; font-size: 0.9rem; line-height: 1.4; background: rgba(212,175,55,0.16); border-left: 5px solid #D4AF37; border-radius: 6px; padding: 6px 10px; margin: 1.1rem 0 0.7rem 0; }
@@ -223,6 +222,7 @@ if st.session_state.cockpit_wide:
     section[data-testid="stSidebar"]:not([aria-expanded="false"]) { width: min(78vw, 1150px) !important; min-width: min(78vw, 1150px) !important; max-width: min(78vw, 1150px) !important; }
     section[data-testid="stSidebar"]:not([aria-expanded="false"]) > div { width: 100% !important; }
     section[data-testid="stSidebar"] div[data-testid="stNumberInput"] { max-width: 260px !important; }
+    section[data-testid="stSidebar"] div[data-testid="stButton"] { justify-content: flex-start !important; }
     </style>""", unsafe_allow_html=True)
 
 def _col_px(df, c):
@@ -232,37 +232,42 @@ def _col_px(df, c):
     return int(min(max(head, cells, 64), 300))
 
 def sb_editor(df, **kw):
-    """Cockpit feed table. Squeezed: as before. Spread: every column is sized to its data, so the box stays compact."""
-    if st.session_state.cockpit_wide:
-        try:
-            cfg = dict(kw.get("column_config") or {})
-            total = 0
-            for c in df.columns:
-                px = _col_px(df, c)
-                base = dict(cfg[c]) if c in cfg else dict(st.column_config.Column(label=str(c)))
+    """Cockpit feed table. Every key-in column gets a red marker in its heading (fixed columns have none).
+    Spread cockpit: each column is also sized to its data, so the box stays compact."""
+    wide = st.session_state.cockpit_wide
+    try:
+        cfg = dict(kw.get("column_config") or {})
+        total = 0
+        for c in df.columns:
+            base = dict(cfg[c]) if c in cfg else dict(st.column_config.Column(label=str(c)))
+            keyin = not base.get("disabled")
+            if keyin:
+                base["label"] = "🔴 " + str(c)
+            if wide:
+                px = _col_px(df, c) + (26 if keyin else 0)
                 base["width"] = px
-                cfg[c] = base
                 total += px
-            kw2 = dict(kw, column_config=cfg)
+            cfg[c] = base
+        kw2 = dict(kw, column_config=cfg)
+        if wide:
             try:
                 return st.data_editor(df, width=total + 12, **kw2)
             except TypeError:
-                return st.data_editor(df, **kw2)
-        except Exception:
-            pass
-    return st.data_editor(df, **kw)
+                pass
+        return st.data_editor(df, **kw2)
+    except Exception:
+        return st.data_editor(df, **kw)
 
 def feed_title(text):
     """Heading shown above every feed box so the user knows what to key in."""
     st.markdown(f'<div class="feed-title">▸ {text}</div>', unsafe_allow_html=True)
 
 with st.sidebar:
-    _h_col, _b_col = st.columns([5, 4])
-    with _h_col:
-        st.header("⚙️ Cockpit Feed")
-    with _b_col:
-        st.button("❮  Squeeze" if st.session_state.cockpit_wide else "Spread  ❯", on_click=_toggle_cockpit,
-                  help="Click to squeeze the cockpit back" if st.session_state.cockpit_wide else "Click to spread the cockpit so the feed tables are fully visible")
+    # top line: Spread (top-right) when squeezed, Squeeze (top-left) when spread; heading sits below it
+    st.button("❮  Squeeze" if st.session_state.cockpit_wide else "Spread  ❯", on_click=_toggle_cockpit,
+              help="Click to squeeze the cockpit back" if st.session_state.cockpit_wide else "Click to spread the cockpit so the feed tables are fully visible")
+    st.header("⚙️ Cockpit Feed")
+    st.caption("🔴 = key-in column  |  heading without 🔴 = fixed, not editable")
     sidebar_context = st.radio(
         "Cockpit Feed",
         options=["Sales / FG Feed", "RM Qt Feed", "RM Val Feed", "Direct Expenses Feed", "Indirect Expenses Feed"],
@@ -614,7 +619,61 @@ for h in indirect_heads:
         ix_cost[h][p] = cost
 ix_total_cost = {p: [sum(ix_cost[h][p][i] for h in indirect_heads) for i in range(17)] for p in products}
 
-# ---- Hierarchical P&L compiler (19 Sl Nos, Level 1 - Level 4). Same function serves "All" and a single product ----
+# ---- Step 8 (NEW): COGS per unit for the Costing page (Rs per Kg) ----
+# RM consumption + Direct heads : cost / Production Qt.   Indirect heads : cost / Sale Qt.
+# Travelling Expenses and Carriage Outward are NOT part of this costing (not yet incurred, so not part of FG valuation).
+cost_ix_heads = [h for h in indirect_heads if h not in ("Travelling Expenses", "Carriage Outward")]
+def _cost_pu(cost, qty):      # Rs lacs / Qt -> Rs per Kg ; Year columns = annual cost / annual Qt (weighted), not a sum of months
+    return [(c * 100000.0 / q if q > 0 else 0.0) for c, q in zip(cost, qty)]
+cost_pu = {}
+for p in products:
+    _d = {"rm": _cost_pu(rm_cons_val_p_total[p], fg_prod_matrix[p])}
+    _d["dx"] = {h: _cost_pu(dx_cost[h][p], fg_prod_matrix[p]) for h in direct_heads}
+    _d["ix"] = {h: _cost_pu(ix_cost[h][p], qty_matrix[p]) for h in cost_ix_heads}
+    _d["dx_tot"] = [sum(_d["dx"][h][i] for h in direct_heads) for i in range(17)]
+    _d["ix_tot"] = [sum(_d["ix"][h][i] for h in cost_ix_heads) for i in range(17)]
+    _d["cogs"] = [_d["rm"][i] + _d["dx_tot"][i] + _d["ix_tot"][i] for i in range(17)]
+    cost_pu[p] = _d
+cogs_pu = {p: cost_pu[p]["cogs"] for p in products}
+
+def build_costing_df(p):
+    """One 'COGS Per Unit : P1' table in the Attachment 1 layout (blank spacer rows included)."""
+    d, rows = cost_pu[p], []
+    ind = "\u00a0\u00a0\u00a0"
+    def add(sl, label, series=None):
+        r = {"Sl No": sl, f"COGS Per Unit : {p}": label}
+        for i, c in enumerate(display_columns): r[c] = series[i] if series is not None else float("nan")
+        rows.append(r)
+    add("1", "RM consumption", d["rm"]);                add("", "")
+    add("2", "Direct Expenses :", d["dx_tot"])
+    for h in direct_heads: add("", ind + h, d["dx"][h])
+    add("", "")
+    add("3", "Indirect Expenses :", d["ix_tot"])
+    for h in cost_ix_heads: add("", ind + h, d["ix"][h])
+    add("", "")
+    add("4", "COGS (1+2+3)", d["cogs"])
+    return pd.DataFrame(rows)
+
+# ---- Step 9 (NEW): FG stock valuation (Rs in Lacs) = Qt x COGS per unit (Step 8 figures) ----
+# Closing = closing Qt x that period's COGS/unit (Year 1 closing = M12 closing).
+# Opening : M1 = M1 opening Qt x M1 COGS/unit ; M2 onward = previous month's closing value ; Year 1 = M1 opening ; Year 2-5 = previous year's closing.
+fg_cl_val, fg_op_val, fg_adj, fg_op_rate, fg_cl_rate = {}, {}, {}, {}, {}
+for p in products:
+    cl, op = [0.0] * 17, [0.0] * 17
+    for i in list(range(12)) + [13, 14, 15, 16]: cl[i] = fg_cl_matrix[p][i] * cogs_pu[p][i] / 100000.0
+    cl[12] = cl[11]
+    op[0] = fg_op_matrix[p][0] * cogs_pu[p][0] / 100000.0
+    for i in range(1, 12): op[i] = cl[i - 1]
+    op[12] = op[0]
+    for i in (13, 14, 15, 16): op[i] = cl[i - 1]
+    fg_cl_val[p], fg_op_val[p] = cl, op
+    fg_adj[p] = [op[i] - cl[i] for i in range(17)]                       # FG : Decrease / (Increase) = Opening - Closing
+    fg_op_rate[p] = [(op[i] * 100000.0 / fg_op_matrix[p][i] if fg_op_matrix[p][i] > 0 else 0.0) for i in range(17)]
+    fg_cl_rate[p] = [(cl[i] * 100000.0 / fg_cl_matrix[p][i] if fg_cl_matrix[p][i] > 0 else 0.0) for i in range(17)]
+df_fg_cl_val_final = compile_report(fg_cl_val, "Product")
+df_fg_op_val_final = compile_report(fg_op_val, "Product")
+
+# ---- Hierarchical P&L compiler (20 Sl Nos, Level 1 - Level 4). Same function serves "All" and a single product ----
 pct_of = lambda n, d: [(a / b * 100.0 if b > 0 else 0.0) for a, b in zip(n, d)]
 per_unit = lambda n, d: [(a * 100000.0 / b if b > 0 else 0.0) for a, b in zip(n, d)]       # Rs lacs / Qt -> Rs per Kg
 
@@ -674,7 +733,19 @@ def build_pl(sel):
     add("6", "6", "L1", "RM Consumption /p.u (4/2)", "", "", "", per_unit(cons_t, prod_t), "rate")
     for rm in rms: add("", "6", "L2", "", rm, "", "", per_unit(v_src["con"][rm], prod_t), "rate")
 
-    # 7 : Direct Expenses (L2 Total + 5 heads -> L3 product -> L4 Qt / Rate)
+    # 7, 7a, 7b : FG Decrease / (Increase) = Opening - Closing ; opening / closing stock value (Rs lacs) with Qt and Rate (COGS per unit)
+    fgadj_t = S(lambda p: fg_adj[p])
+    add("7", "7", "L1", "FG : Decrease / (Increase) of FG (7a-7b)", "", "", "", fgadj_t)
+    for p in prods: add("", "7", "L2", "", p, "", "", fg_adj[p])
+    for _si, _lbl, _val, _qty, _rate in (("7a", "FG : Opening stock", fg_op_val, fg_op_matrix, fg_op_rate),
+                                         ("7b", "Less : FG : Closing stock", fg_cl_val, fg_cl_matrix, fg_cl_rate)):
+        add(_si, _si, "L1", _lbl, "", "", "", S(lambda p: _val[p]))
+        for p in prods:
+            add("", _si, "L2", "", p, "", "", _val[p])
+            add("", _si, "L3", "", "", "Qt", "", _qty[p], "qt")
+            add("", _si, "L3", "", "", "Rate", "", _rate[p], "rate")
+
+    # 8 : Direct Expenses (L2 Total + 5 heads -> L3 product -> L4 Qt / Rate)
     def exp_block(si, label, total_f, head_f, heads, qty_f, short_pct_heads=()):
         add(si, si, "L1", label, "", "", "", S(total_f))
         add("", si, "L2", "", "Total", "", "", S(total_f))
@@ -692,45 +763,45 @@ def build_pl(sel):
                 else:
                     add("", si, "L4", "", "", "", "Qt", qty_f(p), "qt")
                     add("", si, "L4", "", "", "", "Rate", per_unit(head_f(h, p), qty_f(p)), "rate")
-    exp_block("7", "Direct Expenses", lambda p: dx_total_cost[p], lambda h, p: dx_cost[h][p], direct_heads, lambda p: fg_prod_matrix[p])
+    exp_block("8", "Direct Expenses", lambda p: dx_total_cost[p], lambda h, p: dx_cost[h][p], direct_heads, lambda p: fg_prod_matrix[p])
 
-    # 8-12 : COP, COP %, COP/p.u., Gross Profit, Gross Profit %
-    cop_p = {p: [rm_cons_val_p_total[p][i] + dx_total_cost[p][i] for i in range(17)] for p in products}
-    cop_t = [c + d for c, d in zip(cons_t, dx_t)]
+    # 9-13 : COP (4+7+8), COP %, COP/p.u., Gross Profit, Gross Profit %
+    cop_p = {p: [rm_cons_val_p_total[p][i] + fg_adj[p][i] + dx_total_cost[p][i] for i in range(17)] for p in products}
+    cop_t = [c + f + d for c, f, d in zip(cons_t, fgadj_t, dx_t)]
     gp_p = {p: [rev_lacs_p[p][i] - cop_p[p][i] for i in range(17)] for p in products}
     gp_t = [r - c for r, c in zip(rev_t, cop_t)]
-    add("8", "8", "L1", "COP (4+7)", "", "", "", cop_t)
-    for p in prods: add("", "8", "L2", "", p, "", "", cop_p[p])
-    add("9", "9", "L1", "COP % (8/3)", "", "", "", pct_of(cop_t, rev_t), "pct")
-    for p in prods: add("", "9", "L2", "", p, "", "", pct_of(cop_p[p], rev_lacs_p[p]), "pct")
-    add("10", "10", "L1", "COP/ p.u. (8/2)", "", "", "", per_unit(cop_t, prod_t), "rate")
-    for p in prods: add("", "10", "L2", "", p, "", "", per_unit(cop_p[p], fg_prod_matrix[p]), "rate")
-    add("11", "11", "L1", "Gross Profit (3-8)", "", "", "", gp_t)
-    for p in prods: add("", "11", "L2", "", p, "", "", gp_p[p])
-    add("12", "12", "L1", "Gross Profit % (11/3)", "", "", "", pct_of(gp_t, rev_t), "pct")
-    for p in prods: add("", "12", "L2", "", p, "", "", pct_of(gp_p[p], rev_lacs_p[p]), "pct")
+    add("9", "9", "L1", "COP (4+7+8)", "", "", "", cop_t)
+    for p in prods: add("", "9", "L2", "", p, "", "", cop_p[p])
+    add("10", "10", "L1", "COP % (9/3)", "", "", "", pct_of(cop_t, rev_t), "pct")
+    for p in prods: add("", "10", "L2", "", p, "", "", pct_of(cop_p[p], rev_lacs_p[p]), "pct")
+    add("11", "11", "L1", "COP/ p.u. (9/2)", "", "", "", per_unit(cop_t, prod_t), "rate")
+    for p in prods: add("", "11", "L2", "", p, "", "", per_unit(cop_p[p], fg_prod_matrix[p]), "rate")
+    add("12", "12", "L1", "Gross Profit (3-9)", "", "", "", gp_t)
+    for p in prods: add("", "12", "L2", "", p, "", "", gp_p[p])
+    add("13", "13", "L1", "Gross Profit % (12/3)", "", "", "", pct_of(gp_t, rev_t), "pct")
+    for p in prods: add("", "13", "L2", "", p, "", "", pct_of(gp_p[p], rev_lacs_p[p]), "pct")
 
-    # 13 : Indirect Expenses (L2 Total + 8 heads -> L3 product -> L4 Qt / Rate)
-    exp_block("13", "Indirect Expenses", lambda p: ix_total_cost[p], lambda h, p: ix_cost[h][p], indirect_heads,
+    # 14 : Indirect Expenses (L2 Total + 8 heads -> L3 product -> L4 Qt / Rate)
+    exp_block("14", "Indirect Expenses", lambda p: ix_total_cost[p], lambda h, p: ix_cost[h][p], indirect_heads,
               lambda p: qty_matrix[p], short_pct_heads=[h for h in indirect_heads if ix_type[h] == "%"])
 
-    # 14-19 : COGS, COGS %, COGS/p.u., EBIDTA, EBIDTA %, EBIDTA/p.u.
+    # 15-20 : COGS (9+14), COGS %, COGS/p.u., EBIDTA (3-15), EBIDTA %, EBIDTA/p.u.
     cogs_p = {p: [cop_p[p][i] + ix_total_cost[p][i] for i in range(17)] for p in products}
     cogs_t = [c + x for c, x in zip(cop_t, ix_t)]
-    eb_p = {p: [rev_lacs_p[p][i] - cogs_p[p][i] for i in range(17)] for p in products}     # EBIDTA = Revenue - COGS (3-14)
+    eb_p = {p: [rev_lacs_p[p][i] - cogs_p[p][i] for i in range(17)] for p in products}     # EBIDTA = Revenue - COGS (3-15)
     eb_t = [r - c for r, c in zip(rev_t, cogs_t)]
-    add("14", "14", "L1", "COGS (8+13)", "", "", "", cogs_t)
-    for p in prods: add("", "14", "L2", "", p, "", "", cogs_p[p])
-    add("15", "15", "L1", "COGS % (14/3)", "", "", "", pct_of(cogs_t, rev_t), "pct")
-    for p in prods: add("", "15", "L2", "", p, "", "", pct_of(cogs_p[p], rev_lacs_p[p]), "pct")
-    add("16", "16", "L1", "COGS / p.u. (14/1)", "", "", "", per_unit(cogs_t, sale_t), "rate")
-    for p in prods: add("", "16", "L2", "", p, "", "", per_unit(cogs_p[p], qty_matrix[p]), "rate")
-    add("17", "17", "L1", "EBIDTA (3-14)", "", "", "", eb_t)
-    for p in prods: add("", "17", "L2", "", p, "", "", eb_p[p])
-    add("18", "18", "L1", "EBIDTA % (17/3)", "", "", "", pct_of(eb_t, rev_t), "pct")
-    for p in prods: add("", "18", "L2", "", p, "", "", pct_of(eb_p[p], rev_lacs_p[p]), "pct")
-    add("19", "19", "L1", "EBIDTA / p.u.(17/1)", "", "", "", per_unit(eb_t, sale_t), "rate")
-    for p in prods: add("", "19", "L2", "", p, "", "", per_unit(eb_p[p], qty_matrix[p]), "rate")
+    add("15", "15", "L1", "COGS (9+14)", "", "", "", cogs_t)
+    for p in prods: add("", "15", "L2", "", p, "", "", cogs_p[p])
+    add("16", "16", "L1", "COGS % (15/3)", "", "", "", pct_of(cogs_t, rev_t), "pct")
+    for p in prods: add("", "16", "L2", "", p, "", "", pct_of(cogs_p[p], rev_lacs_p[p]), "pct")
+    add("17", "17", "L1", "COGS / p.u. (15/1)", "", "", "", per_unit(cogs_t, sale_t), "rate")
+    for p in prods: add("", "17", "L2", "", p, "", "", per_unit(cogs_p[p], qty_matrix[p]), "rate")
+    add("18", "18", "L1", "EBIDTA (3-15)", "", "", "", eb_t)
+    for p in prods: add("", "18", "L2", "", p, "", "", eb_p[p])
+    add("19", "19", "L1", "EBIDTA % (18/3)", "", "", "", pct_of(eb_t, rev_t), "pct")
+    for p in prods: add("", "19", "L2", "", p, "", "", pct_of(eb_p[p], rev_lacs_p[p]), "pct")
+    add("20", "20", "L1", "EBIDTA / p.u.(18/1)", "", "", "", per_unit(eb_t, sale_t), "rate")
+    for p in prods: add("", "20", "L2", "", p, "", "", per_unit(eb_p[p], qty_matrix[p]), "rate")
     return pd.DataFrame(rows)
 
 df_pl_master_raw = build_pl("All")
@@ -804,7 +875,7 @@ def ix_tables(cost_by_p, sel):
 # -----------------------------------------------------------------------------
 # CHAPTER 5: TOP PANEL NAVIGATION ROUTER & WORKSPACE VIEWPORTS
 # -----------------------------------------------------------------------------
-page_tab5, page_tab1, page_tab2, page_tab3, page_tab4, page_tab_dx, page_tab_ix = st.tabs(["PL", "Revenue", "FG", "RM Qt", "RM Val", "Direct Expenses", "Indirect Expenses"])
+page_tab5, page_tab1, page_tab2, page_tab3, page_tab4, page_tab_dx, page_tab_ix, page_tab_cost = st.tabs(["PL", "Revenue", "FG", "RM Qt", "RM Val", "Direct Expenses", "Indirect Expenses", "Costing"])
 
 # (Streamlit tabs are client-side only, so the sidebar radio is synced by the script in CHAPTER 7.)
 
@@ -825,6 +896,12 @@ with page_tab2:
     st.dataframe(pick_matrix(df_summary_cl, fg_cl_matrix, sel2).style.format({col: "{:,.0f}" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
     st.subheader("4. FG Opening Stock (Qt)")
     st.dataframe(pick_matrix(df_summary_op, fg_op_matrix, sel2).style.format({col: "{:,.0f}" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
+    st.subheader("5. FG Closing Stock (Value)")
+    st.caption("Rs in Lacs = FG Closing Stock Qt x COGS per unit (Costing page)")
+    st.dataframe(pick_matrix(df_fg_cl_val_final, fg_cl_val, sel2).style.format({col: "{:,.2f} L" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
+    st.subheader("6. FG Opening Stock (Value)")
+    st.caption("Rs in Lacs = M1 Opening Qt x M1 COGS per unit; M2 onward = previous month's closing value; Year 2-5 = previous year's closing value")
+    st.dataframe(pick_matrix(df_fg_op_val_final, fg_op_val, sel2).style.format({col: "{:,.2f} L" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
 
 with page_tab3:
     sel3 = title_with_slicer("Material Forecasting", "slicer_rmqt")
@@ -889,6 +966,16 @@ with page_tab_ix:
         st.markdown(f"##### {short} Turnover %")
         st.dataframe(d_pct.style.format(fmt_p), use_container_width=True, hide_index=True)
         st.markdown("---")
+
+with page_tab_cost:
+    sel_cost = title_with_slicer("Costing : COGS Per Unit", "slicer_cost")
+    st.caption("Rs per Kg. RM consumption and Direct Expenses = cost / Production Qt; Indirect Expenses = cost / Sale Qt; Year columns = annual cost / annual Qt. "
+               "Travelling Expenses and Carriage Outward are not included (not yet incurred, so not part of FG valuation).")
+    for p in (products if sel_cost == "All" else [sel_cost]):
+        _cdf = build_costing_df(p)
+        _sty = (_cdf.style.format({c: "{:,.2f}" for c in display_columns}, na_rep="")
+                .apply(lambda r: ["font-weight: bold" if r["Sl No"] != "" else ""] * len(r), axis=1))
+        st.dataframe(_sty, use_container_width=True, hide_index=True, height=35 * (len(_cdf) + 1) + 3)
 
 with page_tab5:
     sel_pl = title_with_slicer("PL Forecast", "slicer_pl")
@@ -1040,6 +1127,8 @@ else:
                 _ix_sheets[_name].append(_df)
         for _name, _dfs in _ix_sheets.items():
             pd.concat(_dfs, ignore_index=True).to_excel(writer, sheet_name=_name, index=False)
+        for _p in products:
+            build_costing_df(_p).to_excel(writer, sheet_name=f"Costing {_p}", index=False)
 
     st.download_button(
         label="📥 Download Updated Comprehensive Interconnected Workbook",
@@ -1064,7 +1153,7 @@ components.html(r"""
                      "Indirect Expenses": "Indirect Expenses Feed", "PL": "RM Val Feed"};
         const norm = s => (s || "").replace(/\s+/g, " ").trim();
         const selectedTab = () => {
-            const t = doc.querySelector('button[role="tab"][aria-selected="true"]');
+            const t = doc.querySelector('[role="tab"][aria-selected="true"]');
             return t ? norm(t.innerText) : null;
         };
         // click the matching radio option in the cockpit (label first, then the input itself as a fallback)
@@ -1080,18 +1169,24 @@ components.html(r"""
             }
             return false;
         };
-        // paint the navigation tabs inline: gold text + gold left bar (default), red text + red bar + red underline (selected)
+        // paint the navigation tabs inline: gold text + gold left bar (default), red text + red left bar (selected); no underline
         const paintTabs = () => {
             const S = (el, p, v) => el.style.setProperty(p, v, "important");
-            doc.querySelectorAll('div[data-baseweb="tab-highlight"]').forEach(h => S(h, "display", "none"));
-            doc.querySelectorAll('div[role="tablist"]').forEach(l => { S(l, "background", "#00294A"); S(l, "border", "none"); });
-            doc.querySelectorAll('button[role="tab"]').forEach(b => {
+            doc.querySelectorAll('[role="tablist"]').forEach(l => {
+                S(l, "background", "#00294A"); S(l, "border", "none");
+                l.querySelectorAll("*").forEach(e => {      // hide the thin highlight / border bars (anything that is not a tab)
+                    if (e.closest('[role="tab"]') || e.querySelector('[role="tab"]')) return;
+                    if (e.offsetHeight > 0 && e.offsetHeight <= 6) S(e, "display", "none");
+                });
+            });
+            doc.querySelectorAll('[role="tab"]').forEach(b => {
                 const sel = b.getAttribute("aria-selected") === "true";
                 const col = sel ? "#FF5252" : "#FFD24C";
                 S(b, "color", col); S(b, "font-weight", "700");
                 S(b, "background", sel ? "#0B3D6B" : "transparent");
+                S(b, "border", "none");
                 S(b, "border-left", "4px solid " + (sel ? "#E53935" : "#D4AF37"));
-                S(b, "box-shadow", sel ? "inset 0 -3px 0 #E53935" : "none");
+                S(b, "box-shadow", "none");
                 b.querySelectorAll("*").forEach(c => { S(c, "color", col); S(c, "font-weight", "700"); });
             });
         };
