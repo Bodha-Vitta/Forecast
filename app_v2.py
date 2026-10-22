@@ -156,6 +156,25 @@ if "pl_editor_ver" not in st.session_state:
 if "growth_saved" not in st.session_state:
     st.session_state.growth_saved = [5.0, 5.0, 5.0, 5.0]
 
+# ---- DEBTORS (Revenue page) and CREDITORS (RM Val page) feeds (new) ----
+if "sidebar_debtor_params_df" not in st.session_state:
+    st.session_state.sidebar_debtor_params_df = pd.DataFrame({
+        "Parameters": ["Days Credit", "Opening Debtors (Rs Lacs)"],
+        "P1": [30.0, 20.0], "P2": [45.0, 12.0], "P3": [60.0, 6.0]
+    })
+if "gst_sales_saved" not in st.session_state:
+    st.session_state.gst_sales_saved = 18.0
+if "rm_credit_days_saved" not in st.session_state:
+    st.session_state.rm_credit_days_saved = 35.0
+if "gst_pur_saved" not in st.session_state:
+    st.session_state.gst_pur_saved = 18.0
+# Opening creditors (Rs Lacs) by RM: pre-filled with M1 purchase value + 18% GST at the default inputs; the user may overwrite any figure
+if "sidebar_op_cred_df" not in st.session_state:
+    st.session_state.sidebar_op_cred_df = pd.DataFrame({
+        "Raw Material": raw_materials,
+        "Opening Creditors (Rs Lacs)": [21.613, 4.098, 0.068, 0.683, 0.409, 0.511, 4.434, 0.846, 0.086, 0.338, 0.783, 0.261]
+    })
+
 # ---- STAGE 6: DIRECT EXPENSES FEED (new) ----
 direct_heads = ["Direct Wages", "Power & Fuel", "Repair & Maintenance", "Carriage inward", "Other Direct OH"]
 dx_common_heads = ["Carriage inward", "Other Direct OH"]      # one rate applied to every product
@@ -283,6 +302,12 @@ with st.sidebar:
     # Indirect Expenses feed tables (edited only inside the Indirect Expenses Feed desk below)
     edited_ix_df = st.session_state.sidebar_ix_df
     edited_ix_infl_df = st.session_state.sidebar_ix_infl_df
+    # Debtors / creditors feeds (edited only inside the Sales / FG Feed and RM Val Feed desks below)
+    edited_debtor_df = st.session_state.sidebar_debtor_params_df
+    gst_sales_pct = st.session_state.gst_sales_saved
+    rm_credit_days = st.session_state.rm_credit_days_saved
+    gst_pur_pct = st.session_state.gst_pur_saved
+    edited_op_cred_df = st.session_state.sidebar_op_cred_df
 
     if sidebar_context == "Sales / FG Feed":
         st.header("📊 1. Sales & FG Feed Desk")
@@ -307,6 +332,11 @@ with st.sidebar:
         feed_title("FG Warehouse - M1 Opening Stock Qt and Closing Stock Hold Days, by Product")
         edited_prod_params_df = sb_editor(st.session_state.sidebar_prod_params_df, hide_index=True, column_config={"Parameters": st.column_config.TextColumn(disabled=True)})
         st.session_state.sidebar_prod_params_df = edited_prod_params_df
+        gst_sales_pct = st.number_input("GST Rate on Sales (%)", value=st.session_state.gst_sales_saved)
+        st.session_state.gst_sales_saved = gst_sales_pct
+        feed_title("Debtors - Days Credit and M1 Opening Debtors (Rs Lacs), by Product")
+        edited_debtor_df = sb_editor(st.session_state.sidebar_debtor_params_df, hide_index=True, column_config={"Parameters": st.column_config.TextColumn(disabled=True)})
+        st.session_state.sidebar_debtor_params_df = edited_debtor_df
         edited_bom_df, edited_rm_logistics_df, edited_rm_price_df, edited_rm_inflation_df = st.session_state.sidebar_bom_df, st.session_state.sidebar_rm_logistics_df, st.session_state.sidebar_rm_price_df, st.session_state.sidebar_rm_inflation_df
     elif sidebar_context == "RM Qt Feed":
         st.header("🧱 2. RM Qt Feed Desk")
@@ -326,6 +356,13 @@ with st.sidebar:
         feed_title("RM Price Inflation (% YoY) - Year 2 to Year 5")
         edited_rm_inflation_df = sb_editor(st.session_state.sidebar_rm_inflation_df, hide_index=True, column_config={"Timeline": st.column_config.TextColumn(disabled=True)})
         st.session_state.sidebar_rm_inflation_df = edited_rm_inflation_df
+        rm_credit_days = st.number_input("RM Credit Period (Days) - all Raw Materials", value=st.session_state.rm_credit_days_saved)
+        st.session_state.rm_credit_days_saved = rm_credit_days
+        gst_pur_pct = st.number_input("GST Rate on RM Purchases (%)", value=st.session_state.gst_pur_saved)
+        st.session_state.gst_pur_saved = gst_pur_pct
+        feed_title("Creditors - M1 Opening Creditors (Rs Lacs), by Raw Material")
+        edited_op_cred_df = sb_editor(st.session_state.sidebar_op_cred_df, hide_index=True, column_config={"Raw Material": st.column_config.TextColumn(disabled=True)})
+        st.session_state.sidebar_op_cred_df = edited_op_cred_df
         edited_qty_df, edited_rate_df, edited_fg_inflation_df, edited_prod_params_df, edited_bom_df, edited_rm_logistics_df = st.session_state.sidebar_qty_df, st.session_state.sidebar_rate_df, st.session_state.sidebar_fg_inflation_df, st.session_state.sidebar_prod_params_df, st.session_state.sidebar_bom_df, st.session_state.sidebar_rm_logistics_df
         g_y2, g_y3, g_y4, g_y5 = [x / 100.0 for x in st.session_state.growth_saved]
     elif sidebar_context == "Direct Expenses Feed":
@@ -673,6 +710,77 @@ for p in products:
 df_fg_cl_val_final = compile_report(fg_cl_val, "Product")
 df_fg_op_val_final = compile_report(fg_op_val, "Product")
 
+# ---- NEW: DEBTORS (Revenue page) and CREDITORS (RM Val page) : same credit-days logic ----
+def credit_schedule(due, days, opening):
+    """due = 17 values (M1-M12, Year 1-5) in Rs lacs. Returns opening, closing and cash flow (inflow for debtors / outflow for creditors).
+    Closing at month t = due of the latest months that the credit days still cover: each full 30 days counts the whole month, the
+    last part counts proportionately (e.g. 70 days = this month + last month + 10/30 of the month before). Months before M1 do not exist (nil).
+    Only M1 closing also carries the unpaid part of the opening balance, capped at 50% of it, so at least 50% of the opening balance is
+    settled in M1 and no cash flow can turn negative. Year 1 closing = M12 closing ; Year 2-5 closing = annual due / 360 x days."""
+    D = max(days, 0.0)
+    cl = [0.0] * 17
+    for t in range(12):
+        s = 0.0
+        for j in range(t + 1):
+            w = min(1.0, max(0.0, D / 30.0 - j))
+            if w <= 0: break
+            s += w * due[t - j]
+        cl[t] = s
+    if D > 0: cl[0] += opening * min(0.5, max(0.0, 1.0 - 30.0 / D))
+    cl[12] = cl[11]
+    for i in range(13, 17): cl[i] = due[i] / 360.0 * D
+    op = [0.0] * 17
+    op[0] = opening
+    for t in range(1, 12): op[t] = cl[t - 1]
+    op[12] = op[0]
+    for i in range(13, 17): op[i] = cl[i - 1]
+    flow = [op[i] + due[i] - cl[i] for i in range(17)]
+    return {"op": op, "cl": cl, "flow": flow}
+
+def build_block_df(blocks, keys, metric_hdr="Metrics"):
+    """Block layout of the Due / Debtors / Creditors tables: a total row (Sl No + label) with one Level 2 row per product / RM beneath it."""
+    rows = []
+    for sl, label, by_key in blocks:
+        r = {"Sl No": sl, metric_hdr: label, "Level 2": ""}
+        for i, c in enumerate(display_columns): r[c] = sum(by_key[k][i] for k in keys)
+        rows.append(r)
+        for k in keys:
+            r = {"Sl No": "", metric_hdr: "", "Level 2": k}
+            for i, c in enumerate(display_columns): r[c] = by_key[k][i]
+            rows.append(r)
+    return pd.DataFrame(rows)
+
+def show_block_df(df):
+    sty = (df.style.format({c: "{:,.2f} L" for c in display_columns}, na_rep="")
+           .apply(lambda r: ["font-weight: bold" if r["Sl No"] != "" else ""] * len(r), axis=1))
+    st.dataframe(sty, use_container_width=True, hide_index=True, height=min(35 * (len(df) + 1) + 3, 1300))
+
+# Debtors : by product
+dbt_gst = {p: [v * safe_float(gst_sales_pct) / 100.0 for v in rev_lacs_p[p]] for p in products}
+dbt_due = {p: [a + b for a, b in zip(rev_lacs_p[p], dbt_gst[p])] for p in products}
+dbt_days = {p: safe_float(edited_debtor_df.loc[edited_debtor_df["Parameters"] == "Days Credit", p].values) for p in products}
+dbt_open = {p: safe_float(edited_debtor_df.loc[edited_debtor_df["Parameters"] == "Opening Debtors (Rs Lacs)", p].values) for p in products}
+dbt = {p: credit_schedule(dbt_due[p], dbt_days[p], dbt_open[p]) for p in products}
+
+# Creditors : by raw material (one common credit period)
+crd_gst = {rm: [v * safe_float(gst_pur_pct) / 100.0 for v in rm_purch_val_matrix[rm]] for rm in raw_materials}
+crd_due = {rm: [a + b for a, b in zip(rm_purch_val_matrix[rm], crd_gst[rm])] for rm in raw_materials}
+crd_open = {rm: safe_float(edited_op_cred_df.loc[edited_op_cred_df["Raw Material"] == rm, "Opening Creditors (Rs Lacs)"].values) for rm in raw_materials}
+crd = {rm: credit_schedule(crd_due[rm], safe_float(rm_credit_days), crd_open[rm]) for rm in raw_materials}
+
+def debtor_due_df(prods):
+    return build_block_df([("1", "Sale", rev_lacs_p), ("2", "GST", dbt_gst), ("3", "Due", dbt_due)], prods)
+def debtor_flow_df(prods):
+    return build_block_df([("1", "Opening Debtors", {p: dbt[p]["op"] for p in products}), ("2", "Add : Due Value", dbt_due),
+                           ("3", "Less : Closing Debtors", {p: dbt[p]["cl"] for p in products}),
+                           ("4", "Cash Inflow", {p: dbt[p]["flow"] for p in products})], prods)
+def creditor_due_df():
+    return build_block_df([("1", "Purchase", rm_purch_val_matrix), ("2", "GST", crd_gst), ("3", "Due to Suppliers", crd_due)], raw_materials)
+def creditor_flow_df():
+    return build_block_df([("1", "Opening Creditors", {r: crd[r]["op"] for r in raw_materials}), ("2", "Add : Due to Suppliers", crd_due),
+                           ("3", "Less : Closing Creditors", {r: crd[r]["cl"] for r in raw_materials}),
+                           ("4", "Cash Outflow", {r: crd[r]["flow"] for r in raw_materials})], raw_materials)
+
 # ---- Hierarchical P&L compiler (20 Sl Nos, Level 1 - Level 4). Same function serves "All" and a single product ----
 pct_of = lambda n, d: [(a / b * 100.0 if b > 0 else 0.0) for a, b in zip(n, d)]
 per_unit = lambda n, d: [(a * 100000.0 / b if b > 0 else 0.0) for a, b in zip(n, d)]       # Rs lacs / Qt -> Rs per Kg
@@ -885,6 +993,14 @@ with page_tab1:
     st.dataframe(pick_rev(sel1).style.format({col: "{:,.2f} L" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
     st.subheader("2. Sale (Qt)")
     st.dataframe(pick_matrix(df_qty_final, qty_matrix, sel1).style.format({col: "{:,.0f}" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
+    _prods1 = products if sel1 == "All" else [sel1]
+    st.subheader("3. Due Forecast : Sales (Rs in Lacs)")
+    st.caption(f"Due = Sale + Sale x GST ({safe_float(gst_sales_pct):g}% on sales)")
+    show_block_df(debtor_due_df(_prods1))
+    st.subheader("4. Debtors & Cash Flow Movement Forecast (Rs in Lacs)")
+    st.caption("Credit days  " + "  |  ".join(f"{p}: {dbt_days[p]:g}" for p in _prods1) +
+               "      Cash Inflow = Opening Debtors + Due Value - Closing Debtors")
+    show_block_df(debtor_flow_df(_prods1))
 
 with page_tab2:
     sel2 = title_with_slicer("Production Forecasting", "slicer_fg")
@@ -930,6 +1046,12 @@ with page_tab4:
     st.dataframe(pick_rm(sel4, df_rm_op_val_final, rm_op_val_p).style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
     st.subheader("6. RM Closing Stock (Rs in Lacs)")
     st.dataframe(pick_rm(sel4, df_rm_cl_val_final, rm_cl_val_p).style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
+    st.subheader("7. Due to Suppliers (Rs in Lacs)")
+    st.caption(f"RM-wise, all products combined (the Product slicer does not apply).  Due = Purchase + Purchase x GST ({safe_float(gst_pur_pct):g}% on purchases)")
+    show_block_df(creditor_due_df())
+    st.subheader("8. Creditors Flow & Cash Outflow Movement Forecast (Rs in Lacs)")
+    st.caption(f"RM-wise, all products combined.  Credit period {safe_float(rm_credit_days):g} days for all RMs.  Cash Outflow = Opening Creditors + Due to Suppliers - Closing Creditors")
+    show_block_df(creditor_flow_df())
 
 with page_tab_dx:
     sel_dx = title_with_slicer("Direct Expenses Forecast", "slicer_dx")
@@ -1129,6 +1251,10 @@ else:
             pd.concat(_dfs, ignore_index=True).to_excel(writer, sheet_name=_name, index=False)
         for _p in products:
             build_costing_df(_p).to_excel(writer, sheet_name=f"Costing {_p}", index=False)
+        debtor_due_df(products).to_excel(writer, sheet_name="Due Forecast Sales", index=False)
+        debtor_flow_df(products).to_excel(writer, sheet_name="Debtors & Cash Flow", index=False)
+        creditor_due_df().to_excel(writer, sheet_name="Due to Suppliers", index=False)
+        creditor_flow_df().to_excel(writer, sheet_name="Creditors & Cash Outflow", index=False)
 
     st.download_button(
         label="📥 Download Updated Comprehensive Interconnected Workbook",
