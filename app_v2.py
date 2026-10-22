@@ -175,6 +175,26 @@ if "sidebar_op_cred_df" not in st.session_state:
         "Opening Creditors (Rs Lacs)": [21.613, 4.098, 0.068, 0.683, 0.409, 0.511, 4.434, 0.846, 0.086, 0.338, 0.783, 0.261]
     })
 
+# ---- NEW: advance payment on RM orders (RM Val feed) ----
+if "adv_pct_saved" not in st.session_state:
+    st.session_state.adv_pct_saved = 20.0
+
+# ---- NEW: WC (Working Capital) page feeds ----
+if "wc_cash_saved" not in st.session_state:
+    st.session_state.wc_cash_saved = 0.5          # opening bank / cash balance (Rs lacs)
+if "wc_roi_saved" not in st.session_state:
+    st.session_state.wc_roi_saved = 9.0           # rate of interest (% p.a.)
+if "wc_od_saved" not in st.session_state:
+    st.session_state.wc_od_saved = 2.0            # opening bank OD / CC balance (Rs lacs)
+if "wc_margin_saved" not in st.session_state:
+    st.session_state.wc_margin_saved = 25.0       # margin on working capital gap (%)
+wc_flow_cols = ["TL Interest & Bank Charges", "FD Increment", "Tax Payment Provision", "Other Contingency Requirement"]
+wc_bal_cols = ["Stock-in-Process", "Other Current Assets", "Other Current Liabilities"]
+if "sidebar_wc_flow_df" not in st.session_state:
+    st.session_state.sidebar_wc_flow_df = pd.DataFrame({"Timeline": months + future_years, **{c: [0.0] * 16 for c in wc_flow_cols}})
+if "sidebar_wc_bal_df" not in st.session_state:
+    st.session_state.sidebar_wc_bal_df = pd.DataFrame({"Timeline": months + future_years, **{c: [0.0] * 16 for c in wc_bal_cols}})
+
 # ---- STAGE 6: DIRECT EXPENSES FEED (new) ----
 direct_heads = ["Direct Wages", "Power & Fuel", "Repair & Maintenance", "Carriage inward", "Other Direct OH"]
 dx_common_heads = ["Carriage inward", "Other Direct OH"]      # one rate applied to every product
@@ -289,7 +309,7 @@ with st.sidebar:
     st.caption("🔴 = key-in column  |  heading without 🔴 = fixed, not editable")
     sidebar_context = st.radio(
         "Cockpit Feed",
-        options=["Sales / FG Feed", "RM Qt Feed", "RM Val Feed", "Direct Expenses Feed", "Indirect Expenses Feed"],
+        options=["Sales / FG Feed", "RM Qt Feed", "RM Val Feed", "Direct Expenses Feed", "Indirect Expenses Feed", "WC Feed"],
         key="synchronized_sidebar_context_radio_widget",
         label_visibility="collapsed"
     )
@@ -308,6 +328,11 @@ with st.sidebar:
     rm_credit_days = st.session_state.rm_credit_days_saved
     gst_pur_pct = st.session_state.gst_pur_saved
     edited_op_cred_df = st.session_state.sidebar_op_cred_df
+    adv_pct = st.session_state.adv_pct_saved
+    # WC feeds (edited only inside the WC Feed desk below)
+    wc_cash_open, wc_roi = st.session_state.wc_cash_saved, st.session_state.wc_roi_saved
+    wc_od_open, wc_margin = st.session_state.wc_od_saved, st.session_state.wc_margin_saved
+    edited_wc_flow_df, edited_wc_bal_df = st.session_state.sidebar_wc_flow_df, st.session_state.sidebar_wc_bal_df
 
     if sidebar_context == "Sales / FG Feed":
         st.header("📊 1. Sales & FG Feed Desk")
@@ -356,10 +381,12 @@ with st.sidebar:
         feed_title("RM Price Inflation (% YoY) - Year 2 to Year 5")
         edited_rm_inflation_df = sb_editor(st.session_state.sidebar_rm_inflation_df, hide_index=True, column_config={"Timeline": st.column_config.TextColumn(disabled=True)})
         st.session_state.sidebar_rm_inflation_df = edited_rm_inflation_df
-        rm_credit_days = st.number_input("RM Credit Period (Days) - all Raw Materials", value=st.session_state.rm_credit_days_saved)
+        rm_credit_days = st.number_input("RM Credit Period (Days) - on Net Due, all Raw Materials", value=st.session_state.rm_credit_days_saved)
         st.session_state.rm_credit_days_saved = rm_credit_days
         gst_pur_pct = st.number_input("GST Rate on RM Purchases (%)", value=st.session_state.gst_pur_saved)
         st.session_state.gst_pur_saved = gst_pur_pct
+        adv_pct = st.number_input("Advance Payment on RM Orders (%) - paid at order, on Gross Due", value=st.session_state.adv_pct_saved)
+        st.session_state.adv_pct_saved = adv_pct
         feed_title("Creditors - M1 Opening Creditors (Rs Lacs), by Raw Material")
         edited_op_cred_df = sb_editor(st.session_state.sidebar_op_cred_df, hide_index=True, column_config={"Raw Material": st.column_config.TextColumn(disabled=True)})
         st.session_state.sidebar_op_cred_df = edited_op_cred_df
@@ -378,7 +405,7 @@ with st.sidebar:
         st.session_state.sidebar_dx_infl_df = edited_dx_infl_df
         edited_qty_df, edited_rate_df, edited_fg_inflation_df, edited_prod_params_df, edited_bom_df, edited_rm_logistics_df, edited_rm_price_df, edited_rm_inflation_df = st.session_state.sidebar_qty_df, st.session_state.sidebar_rate_df, st.session_state.sidebar_fg_inflation_df, st.session_state.sidebar_prod_params_df, st.session_state.sidebar_bom_df, st.session_state.sidebar_rm_logistics_df, st.session_state.sidebar_rm_price_df, st.session_state.sidebar_rm_inflation_df
         g_y2, g_y3, g_y4, g_y5 = [x / 100.0 for x in st.session_state.growth_saved]
-    else:
+    elif sidebar_context == "Indirect Expenses Feed":
         st.header("🏢 5. Indirect Expenses Feed Desk")
         st.caption("Initial rate - Rs per Kg sold (p.u.) or % of Sale Value, as per 'Against Sale'. Same rate for P1, P2, P3")
         edited_ix_df = sb_editor(st.session_state.sidebar_ix_df, hide_index=True, column_config={"Expense Head": st.column_config.TextColumn(disabled=True), "Against Sale": st.column_config.TextColumn(disabled=True)})
@@ -386,6 +413,24 @@ with st.sidebar:
         st.caption("YoY inflation (%) on rate / % - Year 2 to Year 5")
         edited_ix_infl_df = sb_editor(st.session_state.sidebar_ix_infl_df, hide_index=True, column_config={"Expense Head": st.column_config.TextColumn(disabled=True)})
         st.session_state.sidebar_ix_infl_df = edited_ix_infl_df
+        edited_qty_df, edited_rate_df, edited_fg_inflation_df, edited_prod_params_df, edited_bom_df, edited_rm_logistics_df, edited_rm_price_df, edited_rm_inflation_df = st.session_state.sidebar_qty_df, st.session_state.sidebar_rate_df, st.session_state.sidebar_fg_inflation_df, st.session_state.sidebar_prod_params_df, st.session_state.sidebar_bom_df, st.session_state.sidebar_rm_logistics_df, st.session_state.sidebar_rm_price_df, st.session_state.sidebar_rm_inflation_df
+        g_y2, g_y3, g_y4, g_y5 = [x / 100.0 for x in st.session_state.growth_saved]
+    else:
+        st.header("🏦 6. WC Feed Desk")
+        wc_cash_open = st.number_input("Opening Bank / Cash Balance (Rs Lacs)", value=st.session_state.wc_cash_saved)
+        st.session_state.wc_cash_saved = wc_cash_open
+        wc_roi = st.number_input("Rate of Interest on Working Capital (% p.a.)", value=st.session_state.wc_roi_saved)
+        st.session_state.wc_roi_saved = wc_roi
+        wc_od_open = st.number_input("Opening Bank OD / CC Balance (Rs Lacs)", value=st.session_state.wc_od_saved)
+        st.session_state.wc_od_saved = wc_od_open
+        wc_margin = st.number_input("Margin on Working Capital Gap (%)", value=st.session_state.wc_margin_saved)
+        st.session_state.wc_margin_saved = wc_margin
+        feed_title("WC Cash Outflow Items (Rs Lacs) - M1 to M12 and Year 2-5 (other items are picked up from the other pages)")
+        edited_wc_flow_df = sb_editor(st.session_state.sidebar_wc_flow_df, hide_index=True, column_config={"Timeline": st.column_config.TextColumn(disabled=True)})
+        st.session_state.sidebar_wc_flow_df = edited_wc_flow_df
+        feed_title("WC Other Balances (Rs Lacs) - closing balance, M1 to M12 and Year 2-5")
+        edited_wc_bal_df = sb_editor(st.session_state.sidebar_wc_bal_df, hide_index=True, column_config={"Timeline": st.column_config.TextColumn(disabled=True)})
+        st.session_state.sidebar_wc_bal_df = edited_wc_bal_df
         edited_qty_df, edited_rate_df, edited_fg_inflation_df, edited_prod_params_df, edited_bom_df, edited_rm_logistics_df, edited_rm_price_df, edited_rm_inflation_df = st.session_state.sidebar_qty_df, st.session_state.sidebar_rate_df, st.session_state.sidebar_fg_inflation_df, st.session_state.sidebar_prod_params_df, st.session_state.sidebar_bom_df, st.session_state.sidebar_rm_logistics_df, st.session_state.sidebar_rm_price_df, st.session_state.sidebar_rm_inflation_df
         g_y2, g_y3, g_y4, g_y5 = [x / 100.0 for x in st.session_state.growth_saved]
 # -----------------------------------------------------------------------------
@@ -764,9 +809,14 @@ dbt = {p: credit_schedule(dbt_due[p], dbt_days[p], dbt_open[p]) for p in product
 
 # Creditors : by raw material (one common credit period)
 crd_gst = {rm: [v * safe_float(gst_pur_pct) / 100.0 for v in rm_purch_val_matrix[rm]] for rm in raw_materials}
-crd_due = {rm: [a + b for a, b in zip(rm_purch_val_matrix[rm], crd_gst[rm])] for rm in raw_materials}
+crd_gross = {rm: [a + b for a, b in zip(rm_purch_val_matrix[rm], crd_gst[rm])] for rm in raw_materials}       # Gross Due = Purchase + GST
+_adv_frac = min(max(safe_float(adv_pct), 0.0), 100.0) / 100.0
+crd_adv = {rm: [v * _adv_frac for v in crd_gross[rm]] for rm in raw_materials}                               # Advance paid at order = Adv % x Gross Due
+crd_due = {rm: [g - a for g, a in zip(crd_gross[rm], crd_adv[rm])] for rm in raw_materials}                  # Net Due to Suppliers = Gross Due - Advance (credit days apply on this)
 crd_open = {rm: safe_float(edited_op_cred_df.loc[edited_op_cred_df["Raw Material"] == rm, "Opening Creditors (Rs Lacs)"].values) for rm in raw_materials}
 crd = {rm: credit_schedule(crd_due[rm], safe_float(rm_credit_days), crd_open[rm]) for rm in raw_materials}
+# Cash outflow has 2 types: (a) advance on the current purchase, (b) payment against creditors (Opening + Net Due - Closing)
+crd_out_total = {rm: [a + b for a, b in zip(crd_adv[rm], crd[rm]["flow"])] for rm in raw_materials}
 
 def debtor_due_df(prods):
     return build_block_df([("1", "Sale", rev_lacs_p), ("2", "GST", dbt_gst), ("3", "Due", dbt_due)], prods)
@@ -775,11 +825,119 @@ def debtor_flow_df(prods):
                            ("3", "Less : Closing Debtors", {p: dbt[p]["cl"] for p in products}),
                            ("4", "Cash Inflow", {p: dbt[p]["flow"] for p in products})], prods)
 def creditor_due_df():
-    return build_block_df([("1", "Purchase", rm_purch_val_matrix), ("2", "GST", crd_gst), ("3", "Due to Suppliers", crd_due)], raw_materials)
+    return build_block_df([("1", "Purchase", rm_purch_val_matrix), ("2", "GST", crd_gst), ("3", "Gross Due (1+2)", crd_gross),
+                           ("4", "Less : Advance on Current Purchase", crd_adv), ("5", "Net Due to Suppliers (3-4)", crd_due)], raw_materials)
 def creditor_flow_df():
-    return build_block_df([("1", "Opening Creditors", {r: crd[r]["op"] for r in raw_materials}), ("2", "Add : Due to Suppliers", crd_due),
+    return build_block_df([("1", "Opening Creditors", {r: crd[r]["op"] for r in raw_materials}), ("2", "Add : Net Due to Suppliers", crd_due),
                            ("3", "Less : Closing Creditors", {r: crd[r]["cl"] for r in raw_materials}),
-                           ("4", "Cash Outflow", {r: crd[r]["flow"] for r in raw_materials})], raw_materials)
+                           ("4", "Cash Outflow (a) : Advance on Current Purchase", crd_adv),
+                           ("5", "Cash Outflow (b) : Payment against Creditors (1+2-3)", {r: crd[r]["flow"] for r in raw_materials}),
+                           ("6", "Total Cash Outflow (a+b)", crd_out_total)], raw_materials)
+
+# ---- NEW: WORKING CAPITAL (WC page) : requirement, drawing power, borrowing and interest (Rs lacs) ----
+def _feed_series(df, col, kind):
+    """17 values (M1-M12, Year 1, Year 2-5) from a WC feed table keyed by Timeline. flow : Year 1 = sum of months ; bal : Year 1 = M12 value."""
+    v = [safe_float(df.loc[df["Timeline"] == t, col].values) for t in months + future_years]
+    return v[0:12] + [sum(v[0:12]) if kind == "flow" else v[11]] + v[12:16]
+
+_I = range(17)
+# Table 1 - Working Capital Requirement (cash outflow - cash inflow - cash & bank balance)
+wc_adv    = [sum(crd_adv[rm][i] for rm in raw_materials) for i in _I]                              # (a) advance to suppliers on current purchase
+wc_pay    = [sum(crd[rm]["flow"][i] for rm in raw_materials) for i in _I]                          # (b) payment against creditors
+wc_power  = [sum(dx_cost["Power & Fuel"][p][i] for p in products) for i in _I]
+wc_labour = [sum(dx_cost["Direct Wages"][p][i] for p in products) for i in _I]
+wc_othmfg = [sum(dx_cost[h][p][i] for h in ("Repair & Maintenance", "Carriage inward", "Other Direct OH") for p in products) for i in _I]
+wc_selladm = [sum(ix_total_cost[p][i] for p in products) for i in _I]
+wc_tlint  = _feed_series(edited_wc_flow_df, "TL Interest & Bank Charges", "flow")
+wc_fd     = _feed_series(edited_wc_flow_df, "FD Increment", "flow")
+wc_tax    = _feed_series(edited_wc_flow_df, "Tax Payment Provision", "flow")
+wc_cont   = _feed_series(edited_wc_flow_df, "Other Contingency Requirement", "flow")
+wc_out_items = [wc_adv, wc_pay, wc_power, wc_labour, wc_othmfg, wc_selladm, wc_tlint, wc_fd, wc_tax, wc_cont]
+wc_out = [sum(it[i] for it in wc_out_items) for i in _I]
+wc_in  = [sum(dbt[p]["flow"][i] for p in products) for i in _I]                                    # sale receipts (cash inflow from debtors)
+
+# Table 2 - Drawing Power
+wc_rm  = [sum(rm_cl_val_matrix[rm][i] for rm in raw_materials) for i in _I]
+wc_wip = _feed_series(edited_wc_bal_df, "Stock-in-Process", "bal")
+wc_fg  = [sum(fg_cl_val[p][i] for p in products) for i in _I]
+wc_inv = [a + b + c for a, b, c in zip(wc_rm, wc_wip, wc_fg)]
+wc_rec = [sum(dbt[p]["cl"][i] for p in products) for i in _I]
+wc_oca = _feed_series(edited_wc_bal_df, "Other Current Assets", "bal")
+wc_tca = [a + b + c for a, b, c in zip(wc_inv, wc_rec, wc_oca)]
+wc_cr  = [sum(crd[rm]["cl"][i] for rm in raw_materials) for i in _I]
+wc_ocl = _feed_series(edited_wc_bal_df, "Other Current Liabilities", "bal")
+wc_tliab = [a + b for a, b in zip(wc_cr, wc_ocl)]
+wc_gap = [a - b for a, b in zip(wc_tca, wc_tliab)]
+_mpct = min(max(safe_float(wc_margin), 0.0), 100.0) / 100.0
+wc_mar = [max(g, 0.0) * _mpct for g in wc_gap]
+wc_dp  = [max(g, 0.0) - m for g, m in zip(wc_gap, wc_mar)]             # drawing power = maximum permissible borrowing (never below nil)
+
+# Borrowing chain. Final borrowing = proposed borrowing if DP covers it (DP surplus > 0), otherwise DP (the permissible maximum).
+# Month t opens with the OD/CC and cash closing in month t-1 (M1 = cockpit feeds); Year 1 column treats the whole year as one period; Year 2-5 follow on.
+# Closing cash = Final - Proposed : surplus cash if borrowing is repaid in full, nil if borrowed as proposed, negative = unfunded gap beyond DP.
+wc_od_op, wc_cash_op, wc_req, wc_prop, wc_sur, wc_fin, wc_cash_cl = ([0.0] * 17 for _ in range(7))
+def _wc_step(i, od_open, cash_open):
+    wc_od_op[i], wc_cash_op[i] = od_open, cash_open
+    wc_req[i] = wc_out[i] - wc_in[i] - cash_open
+    wc_prop[i] = wc_req[i] + od_open
+    wc_sur[i] = wc_dp[i] - wc_prop[i]
+    wc_fin[i] = max(wc_prop[i], 0.0) if wc_sur[i] > 0 else wc_dp[i]
+    wc_cash_cl[i] = wc_fin[i] - wc_prop[i]
+_od, _cash = safe_float(wc_od_open), safe_float(wc_cash_open)
+for _t in range(12):
+    _wc_step(_t, _od, _cash)
+    _od, _cash = wc_fin[_t], wc_cash_cl[_t]
+_wc_step(12, wc_od_op[0], wc_cash_op[0])
+for _i in range(13, 17):
+    _wc_step(_i, wc_fin[_i - 1], wc_cash_cl[_i - 1])
+_roi = safe_float(wc_roi) / 100.0
+wc_int = [wc_fin[t] * _roi / 12.0 for t in range(12)]
+wc_int.append(sum(wc_int[0:12]))                                         # Year 1 = sum of months
+for _i in range(13, 17): wc_int.append((wc_od_op[_i] + wc_fin[_i]) / 2.0 * _roi)   # Year 2-5 = rate x average of opening and closing borrowing
+
+def _wc_df(spec, head):
+    """spec rows = (Sl No, label, series or None, bold). Returns the table and the list of bold flags."""
+    rows, bold = [], []
+    for sl, label, series, b in spec:
+        r = {"Sl No": sl, head: label}
+        for i, c in enumerate(display_columns): r[c] = series[i] if series is not None else float("nan")
+        rows.append(r); bold.append(b)
+    return pd.DataFrame(rows), bold
+
+def wc_req_df():
+    ind = "\u00a0\u00a0\u00a0"
+    spec = [("1", "Cash Outflow :", wc_out, True),
+            ("", ind + "RM : Advance to Supplier", wc_adv, False), ("", ind + "Payment to Creditors", wc_pay, False),
+            ("", ind + "Power and fuel", wc_power, False), ("", ind + "Direct labour", wc_labour, False),
+            ("", ind + "Other mfg. Expenses", wc_othmfg, False), ("", ind + "Selling and admn OH", wc_selladm, False),
+            ("", ind + "TL Interest & Bank charges", wc_tlint, False), ("", ind + "FD increament", wc_fd, False),
+            ("", ind + "Tax payment provision", wc_tax, False), ("", ind + "Other Contingency requirement", wc_cont, False),
+            ("2", "Cash Inflow :", wc_in, True), ("", ind + "Sale receipt : Credit", wc_in, False),
+            ("3", "Cash & Bank Balance", wc_cash_op, True),
+            ("4", "Net Additional WCap requirement (1-2-3)", wc_req, True)]
+    return _wc_df(spec, "WORKING CAP REQUIREMENT")
+
+def wc_dp_df():
+    ind = "\u00a0\u00a0\u00a0"
+    spec = [("", "CURRENT ASSETS", None, True),
+            ("", ind + "Raw Materials", wc_rm, False), ("", ind + "Stock-in-process", wc_wip, False), ("", ind + "Finished Goods", wc_fg, False),
+            ("", ind + "Total Inventory", wc_inv, False), ("", ind + "Receivables", wc_rec, False), ("", ind + "Other Current Assets", wc_oca, False),
+            ("1", "TOTAL CA (TCA)", wc_tca, True), ("", "", None, False),
+            ("", "Current Liab other than Bank Borrowing", None, True),
+            ("", ind + "Trade Creditors", wc_cr, False), ("", ind + "Other Current Liabilities", wc_ocl, False),
+            ("2", "TOTAL LIABILITIES", wc_tliab, True), ("", "", None, False),
+            ("3", "Working Capital Gap (1-2)", wc_gap, True), ("4", "Margin", wc_mar, True), ("5", "DP (3-4)", wc_dp, True),
+            ("", "Less : Working Capital Requirement", wc_req, False), ("", "Less : Opening OD/CC Bal", wc_od_op, False),
+            ("6", "Total Proposed Borrowing", wc_prop, True), ("7", "DP SURPLUS / (SHORTFALL) (5-6)", wc_sur, True),
+            ("8", "FINAL BORROWING (Lower of 5 or 6)", wc_fin, True), ("9", "Int on Work Cap", wc_int, True),
+            ("", "Memo : Closing Cash / (Unfunded Gap)", wc_cash_cl, False)]
+    return _wc_df(spec, "Drawing Power, Borrowing & Interest on Working Capital")
+
+def show_wc_df(df_bold):
+    df, bold = df_bold
+    sty = (df.style.format({c: "{:,.2f} L" for c in display_columns}, na_rep="")
+           .apply(lambda r: ["font-weight: bold" if bold[r.name] else ""] * len(r), axis=1))
+    st.dataframe(sty, use_container_width=True, hide_index=True, height=35 * (len(df) + 1) + 3)
 
 # ---- Hierarchical P&L compiler (20 Sl Nos, Level 1 - Level 4). Same function serves "All" and a single product ----
 pct_of = lambda n, d: [(a / b * 100.0 if b > 0 else 0.0) for a, b in zip(n, d)]
@@ -910,6 +1068,10 @@ def build_pl(sel):
     for p in prods: add("", "19", "L2", "", p, "", "", pct_of(eb_p[p], rev_lacs_p[p]), "pct")
     add("20", "20", "L1", "EBIDTA / p.u.(18/1)", "", "", "", per_unit(eb_t, sale_t), "rate")
     for p in prods: add("", "20", "L2", "", p, "", "", per_unit(eb_p[p], qty_matrix[p]), "rate")
+    # 21-22 (NEW) : Interest on Working Capital (WC page) and PBT. Company level, so shown for "All" only (it cannot be split by product).
+    if allsel:
+        add("21", "21", "L1", "Interest on Working Capital (WC page)", "", "", "", wc_int)
+        add("22", "22", "L1", "PBT (18-21)", "", "", "", [e - x for e, x in zip(eb_t, wc_int)])
     return pd.DataFrame(rows)
 
 df_pl_master_raw = build_pl("All")
@@ -983,7 +1145,7 @@ def ix_tables(cost_by_p, sel):
 # -----------------------------------------------------------------------------
 # CHAPTER 5: TOP PANEL NAVIGATION ROUTER & WORKSPACE VIEWPORTS
 # -----------------------------------------------------------------------------
-page_tab5, page_tab1, page_tab2, page_tab3, page_tab4, page_tab_dx, page_tab_ix, page_tab_cost = st.tabs(["PL", "Revenue", "FG", "RM Qt", "RM Val", "Direct Expenses", "Indirect Expenses", "Costing"])
+page_tab5, page_tab1, page_tab2, page_tab3, page_tab4, page_tab_dx, page_tab_ix, page_tab_cost, page_tab_wc = st.tabs(["PL", "Revenue", "FG", "RM Qt", "RM Val", "Direct Expenses", "Indirect Expenses", "Costing", "WC"])
 
 # (Streamlit tabs are client-side only, so the sidebar radio is synced by the script in CHAPTER 7.)
 
@@ -1047,10 +1209,12 @@ with page_tab4:
     st.subheader("6. RM Closing Stock (Rs in Lacs)")
     st.dataframe(pick_rm(sel4, df_rm_cl_val_final, rm_cl_val_p).style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
     st.subheader("7. Due to Suppliers (Rs in Lacs)")
-    st.caption(f"RM-wise, all products combined (the Product slicer does not apply).  Due = Purchase + Purchase x GST ({safe_float(gst_pur_pct):g}% on purchases)")
+    st.caption(f"RM-wise, all products combined (the Product slicer does not apply).  Gross Due = Purchase + Purchase x GST ({safe_float(gst_pur_pct):g}% on purchases).  "
+               f"Advance {_adv_frac * 100:g}% of Gross Due is paid at order; Net Due to Suppliers = Gross Due - Advance")
     show_block_df(creditor_due_df())
     st.subheader("8. Creditors Flow & Cash Outflow Movement Forecast (Rs in Lacs)")
-    st.caption(f"RM-wise, all products combined.  Credit period {safe_float(rm_credit_days):g} days for all RMs.  Cash Outflow = Opening Creditors + Due to Suppliers - Closing Creditors")
+    st.caption(f"RM-wise, all products combined.  Credit period {safe_float(rm_credit_days):g} days for all RMs, applied on Net Due.  "
+               "Cash outflow (a) = advance on current purchase ; (b) = Opening Creditors + Net Due - Closing Creditors (balance paid as per credit days)")
     show_block_df(creditor_flow_df())
 
 with page_tab_dx:
@@ -1209,6 +1373,21 @@ with page_tab5:
     else:
         st.warning("No structural P&L rows selected.")
 
+with page_tab_wc:
+    st.title("Working Capital Forecast")
+    st.caption("Company level (all products, all RMs) - the Product slicer does not apply.  Rs in Lacs.")
+    st.subheader("1. Working Capital Requirement (Rs in Lacs)")
+    st.caption("Cash Outflow - Cash Inflow - Cash & Bank Balance.  RM advance and payment to creditors come from the RM Val page, Power / labour / other mfg expenses from Direct Expenses, "
+               "Selling and admn OH from Indirect Expenses, sale receipts from the Debtors cash flow (Revenue page).  Cash & Bank Balance = opening feed in M1, then the previous period's closing cash.")
+    show_wc_df(wc_req_df())
+    st.subheader("2. Drawing Power, Borrowing & Interest on Working Capital (Rs in Lacs)")
+    st.caption(f"Margin {_mpct * 100:g}% on Working Capital Gap; DP = maximum permissible borrowing.  Total Proposed Borrowing = Working Capital Requirement + Opening OD/CC (M1 = feed, then previous month's Final Borrowing).  "
+               f"Final Borrowing = Proposed Borrowing if DP covers it, else DP.  Interest = Final Borrowing x {safe_float(wc_roi):g}% / 12 (Year 1 = sum of months; Year 2-5 = rate x average of opening and closing borrowing); it flows to the PL page below EBIDTA.")
+    _short = [display_columns[i] for i in range(17) if wc_sur[i] < 0]
+    if _short:
+        st.warning("DP shortfall (borrowing needed is above Drawing Power) in: " + ", ".join(_short) + ".  The unfunded gap is carried forward as negative cash.")
+    show_wc_df(wc_dp_df())
+
 # -----------------------------------------------------------------------------
 # CHAPTER 6: GLOBAL EXCEL PIPELINE COMPILER DOWNSTREAM EXPORTER
 # -----------------------------------------------------------------------------
@@ -1255,6 +1434,8 @@ else:
         debtor_flow_df(products).to_excel(writer, sheet_name="Debtors & Cash Flow", index=False)
         creditor_due_df().to_excel(writer, sheet_name="Due to Suppliers", index=False)
         creditor_flow_df().to_excel(writer, sheet_name="Creditors & Cash Outflow", index=False)
+        wc_req_df()[0].to_excel(writer, sheet_name="WC Requirement", index=False)
+        wc_dp_df()[0].to_excel(writer, sheet_name="WC Borrowing & Interest", index=False)
 
     st.download_button(
         label="📥 Download Updated Comprehensive Interconnected Workbook",
@@ -1276,7 +1457,7 @@ components.html(r"""
         const P = window.parent, doc = P.document;
         const MAP = {"Revenue": "Sales / FG Feed", "FG": "Sales / FG Feed",
                      "RM Qt": "RM Qt Feed", "RM Val": "RM Val Feed", "Direct Expenses": "Direct Expenses Feed",
-                     "Indirect Expenses": "Indirect Expenses Feed", "PL": "RM Val Feed"};
+                     "Indirect Expenses": "Indirect Expenses Feed", "WC": "WC Feed", "PL": "RM Val Feed"};
         const norm = s => (s || "").replace(/\s+/g, " ").trim();
         const selectedTab = () => {
             const t = doc.querySelector('[role="tab"][aria-selected="true"]');
