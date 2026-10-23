@@ -88,6 +88,18 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+st.markdown("""
+    <style>
+    /* ===== ONE font for every page + the cockpit : Segoe UI Light, no bold anywhere ===== */
+    .stApp.stApp.stApp.stApp :is(p, span, div, label, li, a, h1, h2, h3, h4, h5, h6, button, input, textarea, select, summary, th, td, b, strong, em, small, code, caption) {
+        font-family: "Segoe UI Light", "Segoe UI", sans-serif !important; font-weight: 400 !important;
+    }
+    .stApp.stApp.stApp.stApp [data-testid="stIconMaterial"], .stApp.stApp.stApp.stApp span[class*="material-symbols"], .stApp.stApp.stApp.stApp span[class*="material-icons"] {
+        font-family: "Material Symbols Rounded", "Material Icons" !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 # ---- Products added through the "Add Product" cockpit desk (kept in the session; every page / slicer / calculation reads this list) ----
 if "added_products" not in st.session_state: st.session_state.added_products = []     # list of {uid, name, feed_df, sc, rm_df}
 if "ap_uid" not in st.session_state: st.session_state.ap_uid = 0
@@ -457,17 +469,14 @@ def feed_title(text):
     st.markdown(f'<div class="feed-title">▸ {text}</div>', unsafe_allow_html=True)
 
 # ---- Output-table theme : navy cells, bright-gold text, deeper band on heading / total rows, light-coral negatives ----
-T_NAVY, T_BAND, T_GOLD, T_GOLD_SOFT, T_NEG = "#00294A", "#0B3D6B", "#FFD24C", "#F1DE9C", "#FF8A80"
-def _row_band(r):
-    first = str(r.iloc[0]).strip() if len(r) else ""
-    return first.startswith("Total") or ("Sl No" in r.index and str(r["Sl No"]).strip() not in ("", "nan", "None"))
+T_NAVY, T_GOLD, T_ROWHDR, T_NEG = "#00294A", "#FFD24C", "#FFF0A0", "#FF8A80"     # cell blue (= cockpit / navigation bar), number gold, row-header light gold, negative coral
+T_BAND, T_GOLD_SOFT = T_NAVY, T_ROWHDR
 def navy(obj):
-    """Styler with the navy / gold theme (keeps any format / bold already applied)."""
+    """Styler with the dark-blue / gold theme : text columns (row headers) light golden yellow, numbers bright gold, nothing bold."""
     sty = obj if hasattr(obj, "set_properties") else obj.style
-    sty = sty.set_properties(**{"background-color": T_NAVY, "color": T_GOLD})
-    def _rows(r):
-        return [f"background-color: {T_BAND}; font-weight: 700; color: {T_GOLD};" if _row_band(r) else "" for _ in r]
-    sty = sty.apply(_rows, axis=1)
+    sty = sty.set_properties(**{"background-color": T_NAVY, "color": T_GOLD, "font-weight": "400"})
+    _hdr = [c for c in sty.data.columns if not pd.api.types.is_numeric_dtype(sty.data[c])]
+    if _hdr: sty = sty.set_properties(subset=_hdr, **{"color": T_ROWHDR})
     _m = getattr(sty, "map", None) or getattr(sty, "applymap")
     return _m(lambda v: f"color: {T_NEG};" if isinstance(v, (int, float, np.floating)) and not isinstance(v, bool) and v < 0 else "")
 def gdf(obj, **kw):
@@ -2017,10 +2026,9 @@ def render_pl_tree(master_pl, sfx=""):
         styled_pl_df.insert(0, "+/-", pd.array(toggle_vals, dtype="boolean"))
         _pl_depth = df_pl_filtered["Depth"].tolist()          # same row order as styled_pl_df
         def _pl_row_css(r):
-            head = _pl_depth[r.name] == "L1"
             out = []
             for c in r.index:
-                css = f"background-color: {T_BAND if head else T_NAVY}; color: {T_GOLD if head else T_GOLD_SOFT}; font-weight: {700 if head else 400};"
+                css = f"background-color: {T_NAVY}; font-weight: 400; color: {T_ROWHDR if c not in display_columns else T_GOLD};"
                 if c in display_columns and isinstance(r[c], str) and r[c].startswith("-"): css += f" color: {T_NEG};"
                 out.append(css)
             return out
@@ -2246,12 +2254,12 @@ components.html(r"""
             doc.querySelectorAll('[role="tab"]').forEach(b => {
                 const sel = b.getAttribute("aria-selected") === "true";
                 const col = sel ? "#FF5252" : "#FFD24C";
-                S(b, "color", col); S(b, "font-weight", "700");
+                S(b, "color", col); S(b, "font-weight", "400");
                 S(b, "background", sel ? "#0B3D6B" : "transparent");
                 S(b, "border", "none");
                 S(b, "border-left", "4px solid " + (sel ? "#E53935" : "#D4AF37"));
                 S(b, "box-shadow", "none");
-                b.querySelectorAll("*").forEach(c => { S(c, "color", col); S(c, "font-weight", "700"); });
+                b.querySelectorAll("*").forEach(c => { S(c, "color", col); S(c, "font-weight", "400"); });
             });
         };
         if (P.__tabRadioSyncHandler) { doc.removeEventListener("click", P.__tabRadioSyncHandler, true); P.__tabRadioSyncHandler = null; }
