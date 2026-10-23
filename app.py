@@ -13,19 +13,20 @@ st.markdown("""
     <style>
     /* ===== Deep Prussian Blue + Gold theme, compact layout ===== */
     .stApp { background: #F6F4EC; }
-    header[data-testid="stHeader"] { z-index: 99 !important; background: transparent !important; height: 2rem !important; min-height: 2rem !important; }
+    header[data-testid="stHeader"] { z-index: 99 !important; background: #F6F4EC !important; height: 2rem !important; min-height: 2rem !important; }
     .block-container { padding-top: 2.4rem !important; padding-bottom: 1rem !important; padding-left: 1.5rem !important; padding-right: 1.5rem !important; max-width: 100% !important; }
     div[data-testid="stVerticalBlock"] { gap: 0.5rem !important; }
     hr { border-color: #D4AF37 !important; margin: 0.5rem 0 !important; }
 
     /* Navigation tabs: same blue as the cockpit, bright-gold text + gold left accent bar (default); red text + red left bar (selected). No underline */
-    div[data-testid="stTabs"] {
-        position: sticky !important; top: 0px !important; background-color: #F6F4EC !important;
-        z-index: 9999 !important; padding-top: 4px !important; padding-bottom: 6px !important;
-    }
+    /* FROZEN navigation bar: only the tab strip is sticky (the old rule stuck the whole tab block, which is as tall as the page, so it never froze).
+       It sits just below Streamlit's 2rem top header, which is opaque cream so content never shows through. */
+    div[data-testid="stTabs"], div[data-baseweb="tabs"] { overflow: visible !important; }
     .stApp div[role="tablist"], .stApp div[data-baseweb="tab-list"] {
+        position: sticky !important; top: 2rem !important; z-index: 98 !important;
         background: #00294A !important; border: none !important; border-radius: 8px !important;
         padding: 6px 10px !important; gap: 10px !important;
+        box-shadow: 0 -6px 0 0 #F6F4EC, 0 4px 8px rgba(0,41,74,0.35) !important;
     }
     .stApp [role="tab"] { background: transparent !important; border-radius: 4px !important; border: none !important; border-left: 4px solid #D4AF37 !important; box-shadow: none !important; padding: 6px 14px !important; }
     .stApp [role="tab"], .stApp [role="tab"] *, .stApp [role="tab"] p { color: #FFD24C !important; font-weight: 700 !important; }
@@ -60,6 +61,12 @@ st.markdown("""
     section[data-testid="stSidebar"] hr { border-color: #D4AF37 !important; }
     section[data-testid="stSidebar"] h2 { margin-top: 0.9rem !important; }
     section[data-testid="stSidebar"] div[data-testid="stCaptionContainer"] { margin: 0.3rem 0 0.5rem 0 !important; }
+    /* read-only total capex boxes (Add Product desk) */
+    .capex-row { display: flex; gap: 14px; margin: 0.3rem 0 1rem 0; flex-wrap: wrap; }
+    .capex-box { flex: 1 1 220px; background: #FFF6D6; border: 2px solid #D4AF37; border-radius: 8px; padding: 6px 12px; }
+    .capex-box span { display: block; color: #0B3D6B; font-size: 0.78rem; font-weight: 600; }
+    .capex-box b { color: #00294A; font-size: 1.15rem; }
+    .capex-box.tot { background: #D4AF37; } .capex-box.tot span, .capex-box.tot b { color: #00294A; }
     /* heading card above every feed box */
     .feed-title { color: #FFD24C; font-weight: 700; font-size: 0.9rem; line-height: 1.4; background: rgba(212,175,55,0.16); border-left: 5px solid #D4AF37; border-radius: 6px; padding: 6px 10px; margin: 1.1rem 0 0.7rem 0; }
     /* feed boxes: gold frame + glow so they read as boxes to key into */
@@ -399,6 +406,10 @@ if "cockpit_wide" not in st.session_state:
     st.session_state.cockpit_wide = False
 def _toggle_cockpit():
     st.session_state.cockpit_wide = not st.session_state.cockpit_wide
+def _on_ctx_change():
+    """Opening the Add Product desk spreads the cockpit once; the Squeeze / Spread buttons stay fully usable afterwards."""
+    if st.session_state.get("synchronized_sidebar_context_radio_widget") == "Add Product":
+        st.session_state.cockpit_wide = True
 COCKPIT_WIDE = st.session_state.cockpit_wide          # re-evaluated after the radio below (the Add Product desk always opens spread)
 WIDE_CSS = """
     <style>
@@ -445,6 +456,27 @@ def feed_title(text):
     """Heading shown above every feed box so the user knows what to key in."""
     st.markdown(f'<div class="feed-title">▸ {text}</div>', unsafe_allow_html=True)
 
+# ---- Output-table theme : navy cells, bright-gold text, deeper band on heading / total rows, light-coral negatives ----
+T_NAVY, T_BAND, T_GOLD, T_GOLD_SOFT, T_NEG = "#00294A", "#0B3D6B", "#FFD24C", "#F1DE9C", "#FF8A80"
+def _row_band(r):
+    first = str(r.iloc[0]).strip() if len(r) else ""
+    return first.startswith("Total") or ("Sl No" in r.index and str(r["Sl No"]).strip() not in ("", "nan", "None"))
+def navy(obj):
+    """Styler with the navy / gold theme (keeps any format / bold already applied)."""
+    sty = obj if hasattr(obj, "set_properties") else obj.style
+    sty = sty.set_properties(**{"background-color": T_NAVY, "color": T_GOLD})
+    def _rows(r):
+        return [f"background-color: {T_BAND}; font-weight: 700; color: {T_GOLD};" if _row_band(r) else "" for _ in r]
+    sty = sty.apply(_rows, axis=1)
+    _m = getattr(sty, "map", None) or getattr(sty, "applymap")
+    return _m(lambda v: f"color: {T_NEG};" if isinstance(v, (int, float, np.floating)) and not isinstance(v, bool) and v < 0 else "")
+def gdf(obj, **kw):
+    """st.dataframe in the navy / gold theme (falls back to the plain table if styling is not possible)."""
+    try:
+        return st.dataframe(navy(obj), **kw)
+    except Exception:
+        return st.dataframe(obj, **kw)
+
 # ---- ADD PRODUCT desk : helpers ----
 def _nz(v):
     """Number box value : an empty box stays None."""
@@ -457,16 +489,40 @@ AP_SC_DEFAULT = {"op_fg": None, "op_dbt": None, "cust_adv": None, "dbt_days": No
                  "completion": "Auto", "start": "Auto"}
 def _ap_blank_feed():
     return pd.DataFrame({"Assumption": P4_ROWS, **{c: [np.nan] * len(P4_ROWS) for c in p4_cols}})
+AP_DX_RATE = "Rate p.u. (Rs/Kg production)"
+AP_INFL = [f"Year {y} (%)" for y in (2, 3, 4, 5)]
+def _ap_blank_dx():
+    return pd.DataFrame({"Expense Head": direct_heads, "Against": ["p.u (Production Qt)"] * len(direct_heads),
+                         AP_DX_RATE: [np.nan] * len(direct_heads), **{c: [np.nan] * len(direct_heads) for c in AP_INFL}})
+def _ap_blank_ix():
+    return pd.DataFrame({"Expense Head": indirect_heads, "Against Sale": [ix_type[h] for h in indirect_heads],
+                         IX_RATE_COL: [np.nan] * len(indirect_heads), **{c: [np.nan] * len(indirect_heads) for c in AP_INFL}})
+# products added before this version have no own expense feeds : give them empty boxes ; added products no longer share the P1-P4 Direct Expenses desk
+for _c0 in st.session_state.added_products:
+    if "dx_df" not in _c0: _c0["dx_df"] = _ap_blank_dx()
+    if "ix_df" not in _c0: _c0["ix_df"] = _ap_blank_ix()
+    if _c0["name"] in st.session_state.sidebar_dx_rate_df.columns:
+        st.session_state.sidebar_dx_rate_df = st.session_state.sidebar_dx_rate_df.drop(columns=[_c0["name"]])
+
+def _capex_boxes(feed_df):
+    """Read-only totals under the capex rows of the feed table (update as the user keys in)."""
+    g = _feed_getter(feed_df)
+    pay, inst = sum(g("New Capex Payment (Rs Lacs)")[0:12]), sum(g("New Capex Installation Cost (Rs Lacs)")[0:12])
+    st.markdown(f'<div class="capex-row"><div class="capex-box"><span>Total New Capex Payment (Rs Lacs)</span><b>{pay:,.2f}</b></div>'
+                f'<div class="capex-box"><span>Total Installation Cost (Rs Lacs)</span><b>{inst:,.2f}</b></div>'
+                f'<div class="capex-box tot"><span>TOTAL NEW CAPEX (Rs Lacs) - auto</span><b>{pay + inst:,.2f}</b></div></div>', unsafe_allow_html=True)
+
 def _ap_blank_rm(n=3):
     return pd.DataFrame({AP_RM_COLS[0]: [None] * n, **{c: [np.nan] * n for c in AP_RM_COLS[1:]}})
 
-def _ap_inputs(feed_df, sc, rm_df, kp):
+def _ap_inputs(feed_df, sc, rm_df, kp, dx_df, ix_df):
     """Input boxes of one product, in the layout of the 'Add product' sheet. Returns (feed table, scalars, RM table)."""
     feed_title("New Product : Cockpit feed & default figures - M1 to M12 and Year 2-5")
     st.caption("Sale Qt (Kg) and Selling Rate (Rs/Kg) : M1-M12.  Growth % : Sale and Selling Rate Inflation % : Year 2-5.  FG Inventory Hold Days : M1-M12 and Year 2-5.  "
                "New Capex Payment and Installation Cost (Rs Lacs) : in the month they are paid.  Sale Qt before the start month is ignored; "
                "Year 2 Sale = M12 Sale x 12 x (1 + Year 2 growth); Year 2-5 Selling Rate = M12 rate compounded by the yearly inflation.")
     feed_df = sb_editor(feed_df, hide_index=True, key=f"{kp}_feed", column_config={"Assumption": st.column_config.TextColumn(disabled=True)})
+    _capex_boxes(feed_df)
     sc = dict(sc)
     feed_title("Opening position, credit terms, capex funding and timing")
     c1, c2, c3 = st.columns(3)
@@ -490,9 +546,14 @@ def _ap_inputs(feed_df, sc, rm_df, kp):
                "Default Price = Rs/Kg.  If an RM name already exists in the model (e.g. RM1) the product shares that RM : only its ratio and losses are used here, "
                "price / stock / credit terms stay as already fed.")
     rm_df = sb_editor(rm_df, hide_index=True, num_rows="dynamic", key=f"{kp}_rm", column_config={AP_RM_COLS[0]: st.column_config.TextColumn(AP_RM_COLS[0])})
-    return feed_df, sc, rm_df
+    feed_title("Direct Expenses of this product - key in the rate per Kg of production (Rs) and YoY inflation % for Year 2-5 (empty box = nil)")
+    st.caption("Fed separately for every new product - nothing is borrowed from P1-P4.")
+    dx_df = sb_editor(dx_df, hide_index=True, key=f"{kp}_dx", column_config={"Expense Head": st.column_config.TextColumn(disabled=True), "Against": st.column_config.TextColumn(disabled=True)})
+    feed_title("Indirect Expenses of this product - key in the rate (Rs/Kg for p.u, % of sale value for %) and YoY inflation % for Year 2-5 (empty box = nil)")
+    ix_df = sb_editor(ix_df, hide_index=True, key=f"{kp}_ix", column_config={"Expense Head": st.column_config.TextColumn(disabled=True), "Against Sale": st.column_config.TextColumn(disabled=True)})
+    return feed_df, sc, rm_df, dx_df, ix_df
 
-def _ap_validate(name, feed_df, sc, rm_df):
+def _ap_validate(name, feed_df, sc, rm_df, dx_df, ix_df):
     """Returns (errors, warnings). Errors stop the Add; warnings are shown after it."""
     errs, warns, nm = [], [], (name or "").strip()
     reserved = {p.lower() for p in products} | {"all", "total", "product", "timeline"} | {c.lower() for c in display_columns}
@@ -529,6 +590,12 @@ def _ap_validate(name, feed_df, sc, rm_df):
         known = {x.lower(): x for x in _rm_universe()}
         _sh = [known[x["name"].lower()] for x in rows if x["name"].lower() in known]
         if _sh: warns.append("Shared with existing RM(s) : " + ", ".join(_sh) + " - existing price, stock and credit terms are used.")
+    for _lbl, _d, _rc in (("Direct Expenses", dx_df, AP_DX_RATE), ("Indirect Expenses", ix_df, IX_RATE_COL)):
+        if (pd.to_numeric(_d[[_rc] + AP_INFL].stack(), errors="coerce") < 0).any(): errs.append(f"Negative figures are not allowed in the {_lbl} feed.")
+        _br = [h for h, v in zip(_d["Expense Head"], _d[_rc]) if pd.isna(v)]
+        _bi = [h for h, row in zip(_d["Expense Head"], _d[AP_INFL].isna().any(axis=1)) if row]
+        if _br: warns.append(f"{_lbl} rate blank for : {', '.join(_br)} - treated as nil.")
+        if _bi: warns.append(f"{_lbl} inflation blank (Year 2-5) for : {', '.join(_bi)} - treated as 0%.")
     return errs, warns
 
 def _ap_remove(uid):
@@ -545,9 +612,8 @@ def _ap_remove(uid):
 with st.sidebar:
     # top line: Spread (top-right) when squeezed, Squeeze (top-left) when spread; heading sits below it
     _ap_open = (st.session_state.get("synchronized_sidebar_context_radio_widget") == "Add Product")
-    st.button("❮  Squeeze" if st.session_state.cockpit_wide else "Spread  ❯", on_click=_toggle_cockpit, disabled=_ap_open,
-              help=("The cockpit opens spread automatically in the Add Product desk" if _ap_open else
-                    ("Click to squeeze the cockpit back" if st.session_state.cockpit_wide else "Click to spread the cockpit so the feed tables are fully visible")))
+    st.button("❮  Squeeze" if st.session_state.cockpit_wide else "Spread  ❯", on_click=_toggle_cockpit, key="cockpit_toggle_top",
+              help=("Click to squeeze the cockpit back" if st.session_state.cockpit_wide else "Click to spread the cockpit so the feed tables are fully visible"))
     st.header("⚙️ Cockpit Feed")
     st.caption("🔴 = key-in column  |  heading without 🔴 = fixed, not editable")
     sidebar_context = st.radio(
@@ -555,12 +621,13 @@ with st.sidebar:
         options=["Sales / FG Feed", "RM Qt Feed", "RM Val Feed", "Direct Expenses Feed", "Indirect Expenses Feed", "WC Feed",
                  "P4 / New Capex Feed", "FAR Feed", "TL Feed", "Add Product"],
         key="synchronized_sidebar_context_radio_widget",
+        on_change=_on_ctx_change,
         label_visibility="collapsed"
     )
     st.markdown("---")
     _p4_cockpit_auto = False
     _ap_cockpit_auto = False
-    COCKPIT_WIDE = st.session_state.cockpit_wide or (sidebar_context == "Add Product")     # Add Product spreads the cockpit at once
+    COCKPIT_WIDE = st.session_state.cockpit_wide
     if COCKPIT_WIDE: st.markdown(WIDE_CSS, unsafe_allow_html=True)
 
     # Direct Expenses feed tables (edited only inside the Direct Expenses Feed desk below)
@@ -650,7 +717,7 @@ with st.sidebar:
         g_y2, g_y3, g_y4, g_y5 = [x / 100.0 for x in st.session_state.growth_saved]
     elif sidebar_context == "Direct Expenses Feed":
         st.header("🏭 4. Direct Expenses Feed Desk")
-        st.caption("Rate per unit of production (Rs) - applied to Production Qt. Products added in the Add Product desk get their own column here.")
+        st.caption("Rate per unit of production (Rs) - applied to Production Qt. Added products have their own Direct Expenses feed inside the Add Product desk (not here).")
         edited_dx_rate_df = sb_editor(st.session_state.sidebar_dx_rate_df, hide_index=True, column_config={"Expense Head": st.column_config.TextColumn(disabled=True)})
         st.session_state.sidebar_dx_rate_df = edited_dx_rate_df
         feed_title("Common Rate p.u. (Rs) - same rate for all products")
@@ -733,25 +800,20 @@ with st.sidebar:
     elif sidebar_context == "Add Product":
         st.header("➕ 10. Add Product Desk")
         st.caption("Key in the feeds of a new product (every box starts empty) and click Add. The whole model - all pages and every Product slicer - then includes the product. "
-                   "You can add as many products as you need, one after the other. Sales, RM, debtors / creditors, capex, TL, depreciation and working capital follow the same logic as P4.")
+                   "You can add as many products as you need, one after the other. Sales, RM, debtors / creditors, capex and TL follow the same logic as P4; direct and indirect expenses are fed separately for the new product; finance cost, working capital and depreciation are shared as per COGS unless an asset is exclusive to the product.")
         for _kind, _msg in st.session_state.get("ap_flash", []):
             {"success": st.success, "warning": st.warning, "info": st.info}.get(_kind, st.info)(_msg)
         st.session_state.ap_flash = []
         _ver = st.session_state.ap_form_ver
         if f"ap_blank_{_ver}" not in st.session_state:
-            st.session_state[f"ap_blank_{_ver}"] = (_ap_blank_feed(), dict(AP_SC_DEFAULT), _ap_blank_rm())
-        _b_feed, _b_sc, _b_rm = st.session_state[f"ap_blank_{_ver}"]
-        with st.form(f"ap_form_{_ver}"):
+            st.session_state[f"ap_blank_{_ver}"] = (_ap_blank_feed(), dict(AP_SC_DEFAULT), _ap_blank_rm(), _ap_blank_dx(), _ap_blank_ix())
+        _b_feed, _b_sc, _b_rm, _b_dx, _b_ix = st.session_state[f"ap_blank_{_ver}"]
+        with st.container(border=True):
             _ap_name = st.text_input("Name of the New Product (e.g. A1)", value="", max_chars=15, key=f"ap_name_{_ver}")
-            _f_feed, _f_sc, _f_rm = _ap_inputs(_b_feed, _b_sc, _b_rm, f"ap{_ver}")
-            feed_title("Direct Expenses - rate per Kg of production (Rs), optional here - can also be keyed / changed later in the Direct Expenses Feed desk")
-            d1, d2, d3 = st.columns(3)
-            with d1: _dxw = st.number_input("Direct Wages (Rs/Kg)", value=None, min_value=0.0, key=f"ap_dxw_{_ver}")
-            with d2: _dxp = st.number_input("Power & Fuel (Rs/Kg)", value=None, min_value=0.0, key=f"ap_dxp_{_ver}")
-            with d3: _dxr = st.number_input("Repair & Maintenance (Rs/Kg)", value=None, min_value=0.0, key=f"ap_dxr_{_ver}")
-            _ap_go = st.form_submit_button("➕  Add Product to the Model")
+            _f_feed, _f_sc, _f_rm, _f_dx, _f_ix = _ap_inputs(_b_feed, _b_sc, _b_rm, f"ap{_ver}", _b_dx, _b_ix)
+            _ap_go = st.button("➕  Add Product to the Model", key=f"ap_go_{_ver}")
         if _ap_go:
-            _errs, _warns = _ap_validate(_ap_name, _f_feed, _f_sc, _f_rm)
+            _errs, _warns = _ap_validate(_ap_name, _f_feed, _f_sc, _f_rm, _f_dx, _f_ix)
             if _errs:
                 for _e in _errs: st.error(_e)
                 for _w in _warns: st.warning(_w)
@@ -761,10 +823,8 @@ with st.sidebar:
                 _rmc[AP_RM_COLS[0]] = [_known.get(str(x).strip().lower(), str(x).strip()) for x in _rmc[AP_RM_COLS[0]]]      # same RM spelling as the model
                 _nm = _ap_name.strip()
                 st.session_state.ap_uid += 1
-                st.session_state.added_products.append({"uid": st.session_state.ap_uid, "name": _nm, "feed_df": _f_feed.reset_index(drop=True), "sc": dict(_f_sc), "rm_df": _rmc})
-                _dxdf = st.session_state.sidebar_dx_rate_df.copy()
-                _dxdf[_nm] = [_nz(_dxw) or 0.0, _nz(_dxp) or 0.0, _nz(_dxr) or 0.0]
-                st.session_state.sidebar_dx_rate_df = _dxdf
+                st.session_state.added_products.append({"uid": st.session_state.ap_uid, "name": _nm, "feed_df": _f_feed.reset_index(drop=True), "sc": dict(_f_sc), "rm_df": _rmc,
+                                                         "dx_df": _f_dx.reset_index(drop=True), "ix_df": _f_ix.reset_index(drop=True)})
                 st.session_state.ap_form_ver = _ver + 1                 # fresh empty form
                 st.session_state.ap_flash = [("success", f"Product {_nm} added - it is now in every page and in every Product slicer.")] + [("warning", w) for w in _warns]
                 st.rerun()
@@ -773,10 +833,14 @@ with st.sidebar:
             for _c in list(added_products):
                 with st.expander(f"✏️ {_c['name']}"):
                     _kp = f"apx{_c['uid']}"
-                    _c["feed_df"], _c["sc"], _c["rm_df"] = _ap_inputs(_c["feed_df"], _c["sc"], _c["rm_df"], _kp)
-                    st.caption("Direct expense rates of this product are in the Direct Expenses Feed desk (column " + _c["name"] + ").")
+                    _c["feed_df"], _c["sc"], _c["rm_df"], _c["dx_df"], _c["ix_df"] = _ap_inputs(_c["feed_df"], _c["sc"], _c["rm_df"], _kp, _c["dx_df"], _c["ix_df"])
+                    st.caption("All feeds of this product (sales, RM, capex, direct and indirect expenses) are edited here.")
                     st.button(f"🗑 Remove {_c['name']} from the model", key=f"{_kp}_del", on_click=_ap_remove, args=(_c["uid"],))
         _ap_cockpit_auto = True                       # the timing / funding summary is drawn after the calculation below
+    # bottom-left Squeeze / Spread button (same action as the top one)
+    st.markdown("---")
+    st.button("❮  Squeeze" if st.session_state.cockpit_wide else "Spread  ❯", on_click=_toggle_cockpit, key="cockpit_toggle_bottom",
+              help=("Click to squeeze the cockpit back" if st.session_state.cockpit_wide else "Click to spread the cockpit so the feed tables are fully visible"))
 # -----------------------------------------------------------------------------
 # CHAPTER 3: ANALYTICAL COMPUTATION LAYER
 # -----------------------------------------------------------------------------
@@ -1014,10 +1078,19 @@ rm_cons_val_p_total = {p: [sum(rm_cons_val_p[p][rm][i] for rm in raw_materials) 
 
 # ---- Direct Expenses (Rs in Lacs): Production Qt x Rate p.u.; Y2-Y5 rate compounds yearly inflation ----
 dx_cost = {h: {} for h in direct_heads}
+_added_dx = {c["name"]: c["dx_df"] for c in added_products}      # added products : their own direct expense feed (nothing shared with P1-P4)
+_added_ix = {c["name"]: c["ix_df"] for c in added_products}
+def _own(df, head, col):
+    r = df.loc[df["Expense Head"] == head, col]
+    return safe_float(r.values) if len(r) else 0.0
 for h in direct_heads:
-    infl = [safe_float(edited_dx_infl_df.loc[edited_dx_infl_df["Expense Head"] == h, f"Year {y} (%)"].values) / 100.0 for y in (2, 3, 4, 5)]
+    infl0 = [safe_float(edited_dx_infl_df.loc[edited_dx_infl_df["Expense Head"] == h, f"Year {y} (%)"].values) / 100.0 for y in (2, 3, 4, 5)]
     for p in products:
-        if h in dx_common_heads:
+        infl = infl0
+        if p in _added_dx:
+            base = _own(_added_dx[p], h, AP_DX_RATE)
+            infl = [_own(_added_dx[p], h, f"Year {y} (%)") / 100.0 for y in (2, 3, 4, 5)]
+        elif h in dx_common_heads:
             base = safe_float(edited_dx_common_df.loc[edited_dx_common_df["Expense Head"] == h, "Rate p.u. (all products)"].values)
         else:
             base = safe_float(edited_dx_rate_df.loc[edited_dx_rate_df["Expense Head"] == h, p].values)
@@ -1093,15 +1166,18 @@ rev_lacs_p = {p: [v / 100000.0 for v in rev_matrix[p]] for p in products}
 ix_cost, ix_rate = {h: {} for h in indirect_heads}, {}
 for h in indirect_heads:
     ix_row = edited_ix_df.loc[edited_ix_df["Expense Head"] == h]
-    base = safe_float(ix_row[IX_RATE_COL].values)
-    infl = [safe_float(edited_ix_infl_df.loc[edited_ix_infl_df["Expense Head"] == h, f"Year {y} (%)"].values) / 100.0 for y in (2, 3, 4, 5)]
-    yr_rates, running = [], base
-    for k in range(4):
-        running = running * (1.0 + infl[k])
-        yr_rates.append(running)
-    rate_series = [base] * 13 + yr_rates                      # M1-M12, Year 1, Year 2-5
-    ix_rate[h] = rate_series
+    base0 = safe_float(ix_row[IX_RATE_COL].values)
+    infl0 = [safe_float(edited_ix_infl_df.loc[edited_ix_infl_df["Expense Head"] == h, f"Year {y} (%)"].values) / 100.0 for y in (2, 3, 4, 5)]
     for p in products:
+        base, infl = base0, infl0
+        if p in _added_ix:                                    # added product : its own rate / % and inflation
+            base = _own(_added_ix[p], h, IX_RATE_COL)
+            infl = [_own(_added_ix[p], h, f"Year {y} (%)") / 100.0 for y in (2, 3, 4, 5)]
+        yr_rates, running = [], base
+        for k in range(4):
+            running = running * (1.0 + infl[k])
+            yr_rates.append(running)
+        if p == products[0]: ix_rate[h] = [base0] * 13 + yr_rates
         cost = [0.0] * 17
         for idx in range(12):
             cost[idx] = (qty_matrix[p][idx] * base / 100000.0) if ix_type[h] == "p.u" else (rev_lacs_p[p][idx] * base / 100.0)
@@ -1208,7 +1284,7 @@ def build_block_df(blocks, keys, metric_hdr="Metrics"):
 def show_block_df(df):
     sty = (df.style.format({c: "{:,.2f} L" for c in display_columns}, na_rep="")
            .apply(lambda r: ["font-weight: bold" if r["Sl No"] != "" else ""] * len(r), axis=1))
-    st.dataframe(sty, use_container_width=True, hide_index=True, height=min(35 * (len(df) + 1) + 3, 1300))
+    gdf(sty, width="stretch", hide_index=True, height=min(35 * (len(df) + 1) + 3, 1300))
 
 # Debtors : by product
 dbt_gst = {p: [v * safe_float(gst_sales_pct) / 100.0 for v in rev_lacs_p[p]] for p in products}
@@ -1498,7 +1574,7 @@ def show_wc_df(df_bold):
     df, bold = df_bold
     sty = (df.style.format({c: "{:,.2f} L" for c in display_columns}, na_rep="")
            .apply(lambda r: ["font-weight: bold" if bold[r.name] else ""] * len(r), axis=1))
-    st.dataframe(sty, use_container_width=True, hide_index=True, height=35 * (len(df) + 1) + 3)
+    gdf(sty, width="stretch", hide_index=True, height=35 * (len(df) + 1) + 3)
 
 # ---- Hierarchical P&L compiler (16 Sl Nos, Level 1 - Level 4). Same function serves "All" and a single product ----
 pct_of = lambda n, d: [(a / b * 100.0 if b > 0 else 0.0) for a, b in zip(n, d)]
@@ -1746,9 +1822,9 @@ page_tab5, page_tab1, page_tab2, page_tab3, page_tab4, page_tab_dx, page_tab_ix,
 with page_tab1:
     sel1 = title_with_slicer("Sales Forecasting", "slicer_rev")
     st.subheader("1. Revenue (Rs in Lacs)")
-    st.dataframe(pick_rev(sel1).style.format({col: "{:,.2f} L" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
+    gdf(pick_rev(sel1).style.format({col: "{:,.2f} L" for col in display_columns if col != "Product"}), width="stretch", hide_index=True)
     st.subheader("2. Sale (Qt)")
-    st.dataframe(pick_matrix(df_qty_final, qty_matrix, sel1).style.format({col: "{:,.0f}" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
+    gdf(pick_matrix(df_qty_final, qty_matrix, sel1).style.format({col: "{:,.0f}" for col in display_columns if col != "Product"}), width="stretch", hide_index=True)
     _prods1 = products if sel1 == "All" else [sel1]
     st.subheader("3. Due Forecast : Sales (Rs in Lacs)")
     st.caption(f"Due = Sale + Sale x GST ({safe_float(gst_sales_pct):g}% on sales)")
@@ -1761,47 +1837,47 @@ with page_tab1:
 with page_tab2:
     sel2 = title_with_slicer("Production Forecasting", "slicer_fg")
     st.subheader("1. FG Flow (Qt)")
-    st.dataframe(pick_fg_flow(sel2).style.format({col: "{:,.0f}" for col in display_columns if col not in ["Product", "FG Inventory Metrics"]}), use_container_width=True, hide_index=True)
+    gdf(pick_fg_flow(sel2).style.format({col: "{:,.0f}" for col in display_columns if col not in ["Product", "FG Inventory Metrics"]}), width="stretch", hide_index=True)
     st.subheader("2. Production (Qt)")
-    st.dataframe(pick_matrix(df_summary_prod, fg_prod_matrix, sel2).style.format({col: "{:,.0f}" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
+    gdf(pick_matrix(df_summary_prod, fg_prod_matrix, sel2).style.format({col: "{:,.0f}" for col in display_columns if col != "Product"}), width="stretch", hide_index=True)
     st.subheader("3. FG Closing Stock (Qt)")
-    st.dataframe(pick_matrix(df_summary_cl, fg_cl_matrix, sel2).style.format({col: "{:,.0f}" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
+    gdf(pick_matrix(df_summary_cl, fg_cl_matrix, sel2).style.format({col: "{:,.0f}" for col in display_columns if col != "Product"}), width="stretch", hide_index=True)
     st.subheader("4. FG Opening Stock (Qt)")
-    st.dataframe(pick_matrix(df_summary_op, fg_op_matrix, sel2).style.format({col: "{:,.0f}" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
+    gdf(pick_matrix(df_summary_op, fg_op_matrix, sel2).style.format({col: "{:,.0f}" for col in display_columns if col != "Product"}), width="stretch", hide_index=True)
     st.subheader("5. FG Closing Stock (Value)")
     st.caption("Rs in Lacs = FG Closing Stock Qt x COGS per unit (Costing page)")
-    st.dataframe(pick_matrix(df_fg_cl_val_final, fg_cl_val, sel2).style.format({col: "{:,.2f} L" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
+    gdf(pick_matrix(df_fg_cl_val_final, fg_cl_val, sel2).style.format({col: "{:,.2f} L" for col in display_columns if col != "Product"}), width="stretch", hide_index=True)
     st.subheader("6. FG Opening Stock (Value)")
     st.caption("Rs in Lacs = M1 Opening Qt x M1 COGS per unit; M2 onward = previous month's closing value; Year 2-5 = previous year's closing value")
-    st.dataframe(pick_matrix(df_fg_op_val_final, fg_op_val, sel2).style.format({col: "{:,.2f} L" for col in display_columns if col != "Product"}), use_container_width=True, hide_index=True)
+    gdf(pick_matrix(df_fg_op_val_final, fg_op_val, sel2).style.format({col: "{:,.2f} L" for col in display_columns if col != "Product"}), width="stretch", hide_index=True)
 
 with page_tab3:
     sel3 = title_with_slicer("Material Forecasting", "slicer_rmqt")
     st.subheader("1. RM Flow (Qt)")
-    st.dataframe(pick_rm_flow(sel3, master_rm_flow_df, rm_op_p, rm_purch_p, rm_cons_p, rm_cl_p, "RM Flow(Qt) Metrics").style.format({col: "{:,.0f}" for col in display_columns if col not in ["Raw Material", "RM Flow(Qt) Metrics"]}), use_container_width=True, hide_index=True)
+    gdf(pick_rm_flow(sel3, master_rm_flow_df, rm_op_p, rm_purch_p, rm_cons_p, rm_cl_p, "RM Flow(Qt) Metrics").style.format({col: "{:,.0f}" for col in display_columns if col not in ["Raw Material", "RM Flow(Qt) Metrics"]}), width="stretch", hide_index=True)
     st.subheader("2. RM Consumption (Qt)")
-    st.dataframe(pick_rm(sel3, df_rm_consumption_final, rm_cons_p).style.format({col: "{:,.0f}" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
+    gdf(pick_rm(sel3, df_rm_consumption_final, rm_cons_p).style.format({col: "{:,.0f}" for col in display_columns if col != "Raw Material"}), width="stretch", hide_index=True)
     st.subheader("3. RM Purchase (Qt)")
-    st.dataframe(pick_rm(sel3, df_rm_purchase_final, rm_purch_p).style.format({col: "{:,.0f}" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
+    gdf(pick_rm(sel3, df_rm_purchase_final, rm_purch_p).style.format({col: "{:,.0f}" for col in display_columns if col != "Raw Material"}), width="stretch", hide_index=True)
     st.subheader("4. RM Loss (Qt)")
-    st.dataframe(pick_rm(sel3, df_rm_loss_final, rm_loss_p).style.format({col: "{:,.0f}" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
+    gdf(pick_rm(sel3, df_rm_loss_final, rm_loss_p).style.format({col: "{:,.0f}" for col in display_columns if col != "Raw Material"}), width="stretch", hide_index=True)
     st.subheader("5. Scrap (Qt)")
-    st.dataframe(pick_scrap(sel3).style.format({col: "{:,.0f}" for col in display_columns if col != "Scrap (Qt)"}), use_container_width=True, hide_index=True)
+    gdf(pick_scrap(sel3).style.format({col: "{:,.0f}" for col in display_columns if col != "Scrap (Qt)"}), width="stretch", hide_index=True)
 
 with page_tab4:
     sel4 = title_with_slicer("Material Forecasting", "slicer_rmval")
     st.subheader("1. RM Flow (Rs in Lacs)")
-    st.dataframe(pick_rm_flow(sel4, master_rm_val_flow_df, rm_op_val_p, rm_purch_val_p, rm_cons_val_p, rm_cl_val_p, "RM Flow(Rs) Metrics").style.format({col: "{:,.2f} L" for col in display_columns if col not in ["Raw Material", "RM Flow(Rs) Metrics"]}), use_container_width=True, hide_index=True)
+    gdf(pick_rm_flow(sel4, master_rm_val_flow_df, rm_op_val_p, rm_purch_val_p, rm_cons_val_p, rm_cl_val_p, "RM Flow(Rs) Metrics").style.format({col: "{:,.2f} L" for col in display_columns if col not in ["Raw Material", "RM Flow(Rs) Metrics"]}), width="stretch", hide_index=True)
     st.subheader("2. RM Purchase (Rs in Lacs)")
-    st.dataframe(pick_rm(sel4, df_rm_purchase_val_final, rm_purch_val_p).style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
+    gdf(pick_rm(sel4, df_rm_purchase_val_final, rm_purch_val_p).style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), width="stretch", hide_index=True)
     st.subheader("3. RM Consumption (Rs in Lacs)")
-    st.dataframe(pick_rm(sel4, df_rm_consumption_val_final, rm_cons_val_p).style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
+    gdf(pick_rm(sel4, df_rm_consumption_val_final, rm_cons_val_p).style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), width="stretch", hide_index=True)
     st.subheader("4. RM Loss (Rs in Lacs)")
-    st.dataframe(pick_rm(sel4, df_rm_loss_val_final, rm_loss_p).style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
+    gdf(pick_rm(sel4, df_rm_loss_val_final, rm_loss_p).style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), width="stretch", hide_index=True)
     st.subheader("5. RM Opening Stock (Rs in Lacs)")
-    st.dataframe(pick_rm(sel4, df_rm_op_val_final, rm_op_val_p).style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
+    gdf(pick_rm(sel4, df_rm_op_val_final, rm_op_val_p).style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), width="stretch", hide_index=True)
     st.subheader("6. RM Closing Stock (Rs in Lacs)")
-    st.dataframe(pick_rm(sel4, df_rm_cl_val_final, rm_cl_val_p).style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), use_container_width=True, hide_index=True)
+    gdf(pick_rm(sel4, df_rm_cl_val_final, rm_cl_val_p).style.format({col: "{:,.2f} L" for col in display_columns if col != "Raw Material"}), width="stretch", hide_index=True)
     st.subheader("7. Due to Suppliers (Rs in Lacs)")
     st.caption(f"RM-wise, all products combined (the Product slicer does not apply).  Gross Due = Purchase + Purchase x GST ({safe_float(gst_pur_pct):g}% on purchases).  "
                f"Advance {_adv_frac * 100:g}% of Gross Due is paid at order (RM13-RM15 / P4 : {_adv_frac_p4 * 100:g}%; RMs of added products : their own advance %); Net Due to Suppliers = Gross Due - Advance")
@@ -1821,11 +1897,11 @@ with page_tab_dx:
     for h, short, cost_by_p in dx_blocks:
         d_cost, d_pu, d_pct = dx_tables(cost_by_p, sel_dx)
         st.subheader(f"{h} : Forecast (Rs in Lacs)")
-        st.dataframe(d_cost.style.format(fmt_l), use_container_width=True, hide_index=True)
+        gdf(d_cost.style.format(fmt_l), width="stretch", hide_index=True)
         st.markdown(f"##### {short} / p.u. (Rs/Kg)")
-        st.dataframe(d_pu.style.format(fmt_n), use_container_width=True, hide_index=True)
+        gdf(d_pu.style.format(fmt_n), width="stretch", hide_index=True)
         st.markdown(f"##### {short} Turnover %")
-        st.dataframe(d_pct.style.format(fmt_p), use_container_width=True, hide_index=True)
+        gdf(d_pct.style.format(fmt_p), width="stretch", hide_index=True)
         st.markdown("---")
 
 with page_tab_ix:
@@ -1840,11 +1916,11 @@ with page_tab_ix:
         st.subheader(f"{h} : Forecast (Rs in Lacs)")
         if h in ix_type: st.caption("Basis : " + ("Rate p.u. x Sale Qt" if ix_type[h] == "p.u" else "% x Sale Value"))
         else: st.caption("Basis : sum of all 8 indirect expense heads")
-        st.dataframe(d_cost.style.format(fmt_l), use_container_width=True, hide_index=True)
+        gdf(d_cost.style.format(fmt_l), width="stretch", hide_index=True)
         st.markdown(f"##### {short} / p.u. (Rs/Kg)")
-        st.dataframe(d_pu.style.format(fmt_n), use_container_width=True, hide_index=True)
+        gdf(d_pu.style.format(fmt_n), width="stretch", hide_index=True)
         st.markdown(f"##### {short} Turnover %")
-        st.dataframe(d_pct.style.format(fmt_p), use_container_width=True, hide_index=True)
+        gdf(d_pct.style.format(fmt_p), width="stretch", hide_index=True)
         st.markdown("---")
 
 with page_tab_cost:
@@ -1855,7 +1931,7 @@ with page_tab_cost:
         _cdf = build_costing_df(p)
         _sty = (_cdf.style.format({c: "{:,.2f}" for c in display_columns}, na_rep="")
                 .apply(lambda r: ["font-weight: bold" if r["Sl No"] != "" else ""] * len(r), axis=1))
-        st.dataframe(_sty, use_container_width=True, hide_index=True, height=35 * (len(_cdf) + 1) + 3)
+        gdf(_sty, width="stretch", hide_index=True, height=35 * (len(_cdf) + 1) + 3)
 
 def render_pl_tree(master_pl, sfx=""):
     """One PL tree table with its own +/- expansion state (sfx keeps the three PL tables independent)."""
@@ -1939,6 +2015,16 @@ def render_pl_tree(master_pl, sfx=""):
         # '+/-' checkbox column (first column). Blank for rows that have nothing to expand.
         toggle_vals = [((node_info[i]["node"] in open_nodes) if node_info[i]["has_children"] else None) for i in visible_idx]
         styled_pl_df.insert(0, "+/-", pd.array(toggle_vals, dtype="boolean"))
+        _pl_depth = df_pl_filtered["Depth"].tolist()          # same row order as styled_pl_df
+        def _pl_row_css(r):
+            head = _pl_depth[r.name] == "L1"
+            out = []
+            for c in r.index:
+                css = f"background-color: {T_BAND if head else T_NAVY}; color: {T_GOLD if head else T_GOLD_SOFT}; font-weight: {700 if head else 400};"
+                if c in display_columns and isinstance(r[c], str) and r[c].startswith("-"): css += f" color: {T_NEG};"
+                out.append(css)
+            return out
+        _pl_view = styled_pl_df.style.apply(_pl_row_css, axis=1)
 
         # Fixed pixel widths (never auto-sized) and pinned (frozen) left columns, so the heads stay visible while scrolling right
         _pl_px = {"+/-": 48, "Si No": 52, "Level 1": 215, "Level 2": 175, "Level 3": 115, "Level 4": 100}
@@ -1950,7 +2036,7 @@ def render_pl_tree(master_pl, sfx=""):
                 else: cfg[_c] = st.column_config.TextColumn(_c, **_kw)
             return cfg
         _pl_args = dict(
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             num_rows="fixed",
             disabled=[c for c in styled_pl_df.columns if c != "+/-"],
@@ -1958,10 +2044,12 @@ def render_pl_tree(master_pl, sfx=""):
             key=f"pl_tree_editor{sfx}_{st.session_state.get(f'pl_editor_ver{sfx}', 0)}",
             on_change=pl_tree_toggle_cb,
         )
-        try:
-            st.data_editor(styled_pl_df, column_config=_pl_cfg(True), **_pl_args)
-        except Exception:      # older Streamlit without pixel widths / pinned columns
-            st.data_editor(styled_pl_df, column_config=_pl_cfg(False), **_pl_args)
+        for _data, _modern in ((_pl_view, True), (_pl_view, False), (styled_pl_df, True), (styled_pl_df, False)):   # navy / gold view first, plain table as fallback
+            try:
+                st.data_editor(_data, column_config=_pl_cfg(_modern), **_pl_args)
+                break
+            except Exception:
+                continue
     else:
         st.warning("No structural P&L rows selected.")
 
@@ -2004,8 +2092,8 @@ with page_tab_far:
     _fmt_far = {c: "{:,.2f} L" for c in display_columns}
     for _h, _d in far_tables():
         st.subheader(_h)
-        st.dataframe(_d.style.format(_fmt_far).apply(lambda r: ["font-weight: bold" if r["Asset"] == "Total" else ""] * len(r), axis=1),
-                     use_container_width=True, hide_index=True, height=35 * (len(_d) + 1) + 3)
+        gdf(_d.style.format(_fmt_far).apply(lambda r: ["font-weight: bold" if r["Asset"] == "Total" else ""] * len(r), axis=1),
+                     width="stretch", hide_index=True, height=35 * (len(_d) + 1) + 3)
 
 with page_tab_tl:
     st.title("Term Loan (TL)")
@@ -2016,16 +2104,16 @@ with page_tab_tl:
     _fmt_tl = {c: "{:,.2f} L" for c in display_columns}
     for _h, _d in tl_tables():
         st.subheader(_h)
-        st.dataframe(_d.style.format(_fmt_tl).apply(lambda r: ["font-weight: bold" if r["Term Loan"] == "Total" else ""] * len(r), axis=1),
-                     use_container_width=True, hide_index=True, height=35 * (len(_d) + 1) + 3)
+        gdf(_d.style.format(_fmt_tl).apply(lambda r: ["font-weight: bold" if r["Term Loan"] == "Total" else ""] * len(r), axis=1),
+                     width="stretch", hide_index=True, height=35 * (len(_d) + 1) + 3)
 
 # P4 / New Capex Feed desk : Auto rows (calculated, not editable) and timing, shown under the P4 feed boxes
 if _p4_cockpit_auto:
     with st.sidebar:
         feed_title("Auto : TL Disbursement & Own Contribution (Rs Lacs), M1-M12")
-        st.dataframe(pd.DataFrame([{"Auto": "TL Sanction & Disbursement", **dict(zip(months, p4_tl_disb))},
+        gdf(pd.DataFrame([{"Auto": "TL Sanction & Disbursement", **dict(zip(months, p4_tl_disb))},
                                    {"Auto": "Capex Margin & Own Cash Contribution", **dict(zip(months, p4_own))}]).style.format({m: "{:,.2f}" for m in months}),
-                     hide_index=True, use_container_width=True)
+                     hide_index=True, width="stretch")
         st.caption(f"Completion : {months[p4_completion]} {'(Auto)' if p4s.get('completion', 'Auto') == 'Auto' else ''}  |  "
                    f"Capitalisation, production & sale start : {display_columns[p4_start]}  |  New P&M capitalised : {p4_asset_value:,.2f} L "
                    f"(incl. interest during construction {p4_idc:,.2f} L)")
@@ -2039,8 +2127,8 @@ if _ap_cockpit_auto and added_products:
                       "Sale & Production Start": display_columns[NPD[_p]["start"]], "Capex + Installation (Rs Lacs)": NPD[_p]["capex_total"],
                       "TL Disbursed": sum(NPD[_p]["tl_disb"]), "Own Contribution": sum(NPD[_p]["own"]),
                       "New P&M Capitalised (Rs Lacs)": asset_val[_p]} for _p in added_names]
-        st.dataframe(pd.DataFrame(_sum_rows).style.format({c: "{:,.2f}" for c in ["Capex + Installation (Rs Lacs)", "TL Disbursed", "Own Contribution", "New P&M Capitalised (Rs Lacs)"]}),
-                     hide_index=True, use_container_width=True)
+        gdf(pd.DataFrame(_sum_rows).style.format({c: "{:,.2f}" for c in ["Capex + Installation (Rs Lacs)", "TL Disbursed", "Own Contribution", "New P&M Capitalised (Rs Lacs)"]}),
+                     hide_index=True, width="stretch")
         for _p in added_names:
             if NPD[_p]["warn"]: st.warning(f"{_p} : {NPD[_p]['warn']}")
 
