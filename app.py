@@ -50,7 +50,10 @@ st.markdown("""
     div[data-testid="stDownloadButton"] button:hover p { color: #00294A !important; }
 
     /* Tables */
-    div[data-testid="stDataFrame"] { border: 1.5px solid #D4AF37; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,41,74,0.18); margin-top: 0.35rem; }
+    div[data-testid="stDataFrame"] { border: 1.5px solid #00294A; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,41,74,0.18); margin-top: 0.35rem; }
+    /* output tables on the pages : outer border in the same dark blue as the cells (cockpit feed boxes keep their gold frame - rule below) */
+    [data-testid="stMain"] div[data-testid="stDataFrame"], [data-testid="stMain"] div[data-testid="stDataEditor"],
+    section.main div[data-testid="stDataFrame"], section.main div[data-testid="stDataEditor"] { border: 1.5px solid #00294A !important; }
 
     /* Sidebar cockpit */
     section[data-testid="stSidebar"] { background: linear-gradient(180deg, #00294A, #001B33) !important; border-right: 2px solid #D4AF37; }
@@ -246,11 +249,13 @@ if "adv_pct_saved" not in st.session_state:
 
 # ---- NEW: WC (Working Capital) page feeds ----
 if "wc_cash_saved" not in st.session_state:
-    st.session_state.wc_cash_saved = 0.5          # opening bank / cash balance (Rs lacs)
+    st.session_state.wc_cash_saved = 1.5          # opening bank / cash balance (Rs lacs)
 if "wc_roi_saved" not in st.session_state:
     st.session_state.wc_roi_saved = 9.0           # rate of interest (% p.a.)
 if "wc_od_saved" not in st.session_state:
-    st.session_state.wc_od_saved = 2.0            # opening bank OD / CC balance (Rs lacs)
+    st.session_state.wc_od_saved = 15.0           # opening bank OD / CC balance (Rs lacs)
+if "wc_limit_saved" not in st.session_state:
+    st.session_state.wc_limit_saved = 20.0        # NEW : OD / CC sanction limit (Rs lacs) - CF page
 if "wc_margin_saved" not in st.session_state:
     st.session_state.wc_margin_saved = 25.0       # margin on working capital gap (%)
 wc_flow_cols = ["FD Increment", "Tax Payment Provision", "Other Contingency Requirement"]   # TL Interest & Bank Charges now comes from the TL page
@@ -656,6 +661,7 @@ with st.sidebar:
     # WC feeds (edited only inside the WC Feed desk below)
     wc_cash_open, wc_roi = st.session_state.wc_cash_saved, st.session_state.wc_roi_saved
     wc_od_open, wc_margin = st.session_state.wc_od_saved, st.session_state.wc_margin_saved
+    wc_od_limit = st.session_state.wc_limit_saved
     edited_wc_flow_df, edited_wc_bal_df = st.session_state.sidebar_wc_flow_df, st.session_state.sidebar_wc_bal_df
     # All other feeds default to their saved values; the desk that is open below overwrites its own ones
     edited_qty_df, edited_rate_df, edited_fg_inflation_df, edited_prod_params_df = st.session_state.sidebar_qty_df, st.session_state.sidebar_rate_df, st.session_state.sidebar_fg_inflation_df, st.session_state.sidebar_prod_params_df
@@ -755,6 +761,8 @@ with st.sidebar:
         st.session_state.wc_roi_saved = wc_roi
         wc_od_open = st.number_input("Opening Bank OD / CC Balance (Rs Lacs)", value=st.session_state.wc_od_saved)
         st.session_state.wc_od_saved = wc_od_open
+        wc_od_limit = st.number_input("OD / CC Sanction Limit (Rs Lacs)", value=float(st.session_state.wc_limit_saved))
+        st.session_state.wc_limit_saved = wc_od_limit
         wc_margin = st.number_input("Margin on Working Capital Gap (%)", value=st.session_state.wc_margin_saved)
         st.session_state.wc_margin_saved = wc_margin
         feed_title("WC Cash Outflow Items (Rs Lacs) - M1 to M12 and Year 2-5 (other items are picked up from the other pages)")
@@ -1757,6 +1765,116 @@ PL_PCT = {s: derive_pl(d, s, "pct") for s, d in PL_VAL.items()}
 PL_PU = {s: derive_pl(d, s, "pu") for s, d in PL_VAL.items()}
 
 # -----------------------------------------------------------------------------
+# CHAPTER 4A (NEW): CASH FLOW (CF page) - company level, Rs in Lacs. Every figure is linked from the pages above.
+# Flows : Year 1 = sum of M1-M12.  Balances : Year 1 = M12 (closing) / M1 (opening).  Headings not yet in the model = 0.
+# -----------------------------------------------------------------------------
+_Z = [0.0] * 17
+def _vsum(*series): return [sum(s[i] for s in series) for i in range(17)]
+def _flow17(m12, y25=None):                        # 12 monthly values (+ optional Year 2-5) -> 17 columns, Year 1 = sum
+    return list(m12) + [sum(m12)] + (list(y25) if y25 is not None else [0.0] * 4)
+
+# Inflow
+cf_tl_rec = _vsum(*[tl[n]["disb"] for n in tl_names])                                       # TL page : disbursement
+cf_bor = [wc_fin[i] for i in range(12)] + [wc_fin[11]] + [wc_fin[i] for i in range(13, 17)]   # month-end bank borrowing O/s (WC page Final Borrowing) ; Year 1 = M12
+_bor_prev = [safe_float(wc_od_open)] + cf_bor[0:11] + [safe_float(wc_od_open)] + [cf_bor[12]] + cf_bor[13:16]
+cf_wc_rec = [cf_bor[i] - _bor_prev[i] for i in range(17)]                                    # increase over previous period's O/s (negative = repayment)
+cf_coll = {p: dbt[p]["flow"] for p in products}                                              # Revenue page : debtors cash inflow
+cf_in = _vsum(cf_tl_rec, cf_wc_rec, *cf_coll.values())
+
+# Outflow : CAPEX
+cf_cap_sup = _flow17([sum(NPD[p]["row"]("New Capex Payment (Rs Lacs)")[i] + NPD[p]["row"]("New Capex Installation Cost (Rs Lacs)")[i] for p in NPD) for i in range(12)])
+cf_cap_dir = _vsum(*[_add_series(r) for r in add_rows])                                      # FAR feed : asset additions
+cf_tl_rep = _vsum(*[tl[n]["rep"] for n in tl_names])                                         # TL page : repayment
+cf_capex = _vsum(cf_cap_sup, cf_cap_dir, cf_tl_rep, wc_fd)
+# Outflow : RM (RM Val page)
+cf_rm_pay = {rm: crd[rm]["flow"] for rm in raw_materials}
+cf_rm_adv = {rm: crd_adv[rm] for rm in raw_materials}
+cf_rm = _vsum(*cf_rm_pay.values(), *cf_rm_adv.values())
+# Outflow : Finance cost (cash) - TL interest includes interest during construction (capitalised in FAR, but paid in cash)
+cf_tl_int_p = {p: [tl_int_p[p][i] + (_idc_by[p]["series"][i] if p in _idc_by else 0.0) for i in range(17)] for p in products}
+cf_fin = _vsum(*wc_int_p.values(), *cf_tl_int_p.values(), *bc_p.values())
+# Outflow : Taxes / other
+cf_tax = _vsum(wc_tax)
+cf_oth_out = _vsum(wc_cont)
+cf_dx = _vsum(*dx_total_cost.values())
+cf_ix = _vsum(*ix_total_cost.values())
+cf_out = _vsum(cf_capex, cf_dx, cf_ix, cf_rm, cf_fin, cf_tax, cf_oth_out)
+
+# Opening / closing cash chain
+cf_open, cf_close = [0.0] * 17, [0.0] * 17
+_c = safe_float(wc_cash_open)
+for _t in range(12):
+    cf_open[_t] = _c
+    cf_close[_t] = _c + cf_in[_t] - cf_out[_t]
+    _c = cf_close[_t]
+cf_open[12] = cf_open[0]
+cf_close[12] = cf_open[12] + cf_in[12] - cf_out[12]
+for _i in range(13, 17):
+    cf_open[_i] = cf_close[_i - 1]
+    cf_close[_i] = cf_open[_i] + cf_in[_i] - cf_out[_i]
+cf_limit = [safe_float(wc_od_limit)] * 17
+cf_free = [a - b for a, b in zip(cf_limit, cf_bor)]
+cf_avail = [a + b for a, b in zip(cf_free, cf_close)]
+
+def build_cf():
+    """CF table in the 'CF' sheet layout, Level 1-4 tree (same columns / +/- expansion as the PL)."""
+    rows = []
+    def add(si, blk, depth, l1, l2, l3, l4, series):
+        d = {"Si No": si, "BlockID": blk, "Depth": depth, "Level 1": l1, "Level 2": l2, "Level 3": l3, "Level 4": l4}
+        for i, c in enumerate(display_columns): d[c] = series[i]
+        d["_fmt"], d["_prod"], d["_dv"] = "lac", None, True
+        rows.append(d)
+    def by_key(blk, label, dct, keys, depth_lbl, depth_key):
+        add("", blk, depth_lbl, "", label if depth_lbl == "L2" else "", label if depth_lbl == "L3" else "", "", _vsum(*[dct[k] for k in keys]))
+        for k in keys:
+            add("", blk, depth_key, "", k if depth_key == "L2" else "", k if depth_key == "L3" else "", k if depth_key == "L4" else "", dct[k])
+
+    add("1", "1", "L1", "Opening Cash Balance", "", "", "", cf_open)
+
+    add("2", "2", "L1", "(+) Total Cash Inflow", "", "", "", cf_in)
+    add("", "2", "L2", "", "New Term Loan Receipt", "", "", cf_tl_rec)
+    add("", "2", "L2", "", "Loan from Management", "", "", _Z)
+    add("", "2", "L2", "", "Working Capital Receipt", "", "", cf_wc_rec)
+    by_key("2", "Collection", cf_coll, products, "L2", "L3")
+    add("", "2", "L2", "", "Tax Refund", "", "", _Z)
+    add("", "2", "L2", "", "Fixed Deposit discount", "", "", _Z)
+    add("", "2", "L2", "", "Others", "", "", _Z)
+
+    add("3", "3", "L1", "(-) Cash Outflow", "", "", "", cf_out)
+    add("", "3", "L2", "", "CAPEX", "", "", cf_capex)
+    for _lbl, _s in (("Payment to Capex supplier", cf_cap_sup), ("Capex : Direct Purchase", cf_cap_dir), ("TL repayment", cf_tl_rep),
+                     ("FIXED DEPOSIT/ Margin", wc_fd), ("Investment In Subsidiary", _Z), ("RENT ADVANCE", _Z), ("Other", _Z)):
+        add("", "3", "L3", "", "", _lbl, "", _s)
+    add("", "3", "L2", "", "Direct Expenses", "", "", cf_dx)
+    for h in direct_heads: by_key("3", h, dx_cost[h], products, "L3", "L4")
+    add("", "3", "L2", "", "Indirect Expenses", "", "", cf_ix)
+    for h in indirect_heads: by_key("3", h, ix_cost[h], products, "L3", "L4")
+    add("", "3", "L2", "", "RM", "", "", cf_rm)
+    by_key("3", "Payment to Suppliers/ Creditors", cf_rm_pay, raw_materials, "L3", "L4")
+    by_key("3", "Advance payment to suppliers", cf_rm_adv, raw_materials, "L3", "L4")
+    add("", "3", "L3", "", "", "Duty", "", _Z)
+    add("", "3", "L3", "", "", "Other", "", _Z)
+    add("", "3", "L2", "", "Finance Cost", "", "", cf_fin)
+    by_key("3", "Interest on WC", wc_int_p, products, "L3", "L4")
+    by_key("3", "Interest on TL", cf_tl_int_p, products, "L3", "L4")
+    by_key("3", "Other (Bank Charges)", bc_p, products, "L3", "L4")
+    add("", "3", "L2", "", "Taxes", "", "", cf_tax)
+    for _lbl, _s in (("GST", _Z), ("Adv Tax", wc_tax), ("Income Tax", _Z), ("Other Admin charges", _Z)):
+        add("", "3", "L3", "", "", _lbl, "", _s)
+    add("", "3", "L2", "", "Other Outflow", "", "", cf_oth_out)
+    add("", "3", "L3", "", "", "Other Contingency (WC feed)", "", wc_cont)
+
+    add("4", "4", "L1", "Closing Cash Balance (1+2-3)", "", "", "", cf_close)
+    add("5", "5", "L1", "Bank Sanction Limit", "", "", "", cf_limit)
+    add("6", "6", "L1", "Bank Borrowing O/s", "", "", "", cf_bor)
+    add("7", "7", "L1", "Free Limit (5-6)", "", "", "", cf_free)
+    add("8", "8", "L1", "Closing Cash Balance (4)", "", "", "", cf_close)
+    add("9", "9", "L1", "Total Cash Available (7+8)", "", "", "", cf_avail)
+    return pd.DataFrame(rows)
+
+df_cf = build_cf()
+
+# -----------------------------------------------------------------------------
 # CHAPTER 4B (NEW): PRODUCT SLICER HELPERS (view-only filters; "All" returns the original tables)
 # -----------------------------------------------------------------------------
 def title_with_slicer(title, key):
@@ -1824,7 +1942,7 @@ def ix_tables(cost_by_p, sel):
 # -----------------------------------------------------------------------------
 # CHAPTER 5: TOP PANEL NAVIGATION ROUTER & WORKSPACE VIEWPORTS
 # -----------------------------------------------------------------------------
-page_tab5, page_tab1, page_tab2, page_tab3, page_tab4, page_tab_dx, page_tab_ix, page_tab_cost, page_tab_wc, page_tab_far, page_tab_tl = st.tabs(["PL", "Revenue", "FG", "RM Qt", "RM Val", "Direct Expenses", "Indirect Expenses", "Costing", "WC", "FAR", "TL"])
+page_tab5, page_tab1, page_tab2, page_tab3, page_tab4, page_tab_dx, page_tab_ix, page_tab_cost, page_tab_wc, page_tab_far, page_tab_tl, page_tab_cf = st.tabs(["PL", "Revenue", "FG", "RM Qt", "RM Val", "Direct Expenses", "Indirect Expenses", "Costing", "WC", "FAR", "TL", "CF"])
 
 # (Streamlit tabs are client-side only, so the sidebar radio is synced by the script in CHAPTER 7.)
 
@@ -1942,8 +2060,8 @@ with page_tab_cost:
                 .apply(lambda r: ["font-weight: bold" if r["Sl No"] != "" else ""] * len(r), axis=1))
         gdf(_sty, width="stretch", hide_index=True, height=35 * (len(_cdf) + 1) + 3)
 
-def render_pl_tree(master_pl, sfx=""):
-    """One PL tree table with its own +/- expansion state (sfx keeps the three PL tables independent)."""
+def render_pl_tree(master_pl, sfx="", px=None):
+    """One PL tree table with its own +/- expansion state (sfx keeps the three PL tables independent; px = optional column widths)."""
     # ---- 1. Describe the tree: for every master row -> node key, parent chain, has-children ----
     # (FIX: the table passed in is used as it is - Value, % against Sales or Cost per Kg; it was previously overwritten by the Value table)
     master_pl = master_pl.reset_index(drop=True)
@@ -1987,6 +2105,27 @@ def render_pl_tree(master_pl, sfx=""):
                 else: st.session_state[f"pl_open_nodes{sfx}"].discard(row_map[r_pos][0])
         st.session_state[f"pl_editor_ver{sfx}"] = ver + 1     # fresh editor state after every click
 
+    _click_cols = ("+/-", "Si No", "Level 1", "Level 2", "Level 3", "Level 4")
+    def pl_tree_click_cb():
+        """NEW : a click on the [+] / [-] cell (or on the heading text) of a heading row expands / collapses it."""
+        ver = st.session_state.get(f"pl_editor_ver{sfx}", 0)
+        ev = st.session_state.get(f"pl_tree_view{sfx}_{ver}")
+        row_map = st.session_state.get(f"pl_row_map{sfx}", [])
+        try:
+            cells = ev["selection"]["cells"]
+        except Exception:
+            cells = []
+        for cell in cells or []:
+            try:
+                r_pos, col = int(cell[0]), str(cell[1])
+            except Exception:
+                continue
+            if col in _click_cols and 0 <= r_pos < len(row_map) and row_map[r_pos][1]:
+                _open = st.session_state[f"pl_open_nodes{sfx}"]
+                if row_map[r_pos][0] in _open: _open.discard(row_map[r_pos][0])
+                else: _open.add(row_map[r_pos][0])
+        st.session_state[f"pl_editor_ver{sfx}"] = ver + 1     # fresh table (no selection left behind) after every click
+
     # ---- 2. Build the visible table ----
     df_pl_filtered = master_pl.loc[visible_idx].copy() if visible_idx else pd.DataFrame(columns=master_pl.columns)
 
@@ -2021,9 +2160,13 @@ def render_pl_tree(master_pl, sfx=""):
 
         styled_pl_df = display_pl_df.apply(format_pl_dataframe, axis=1).reset_index(drop=True)
 
-        # '+/-' checkbox column (first column). Blank for rows that have nothing to expand.
+        # '+/-' first column : clickable [+] / [-] cell (navy, like the rest of the table). Blank for rows that have nothing to expand.
+        # (the old checkbox stays as an automatic fallback when this Streamlit version has no cell-click selection)
         toggle_vals = [((node_info[i]["node"] in open_nodes) if node_info[i]["has_children"] else None) for i in visible_idx]
-        styled_pl_df.insert(0, "+/-", pd.array(toggle_vals, dtype="boolean"))
+        click_vals = [("" if v is None else ("[-]" if v else "[+]")) for v in toggle_vals]
+        styled_cb_df = styled_pl_df.copy()
+        styled_cb_df.insert(0, "+/-", pd.array(toggle_vals, dtype="boolean"))
+        styled_pl_df.insert(0, "+/-", click_vals)
         _pl_depth = df_pl_filtered["Depth"].tolist()          # same row order as styled_pl_df
         def _pl_row_css(r):
             out = []
@@ -2033,37 +2176,56 @@ def render_pl_tree(master_pl, sfx=""):
                 out.append(css)
             return out
         _pl_view = styled_pl_df.style.apply(_pl_row_css, axis=1)
+        _cb_view = styled_cb_df.style.apply(_pl_row_css, axis=1)
 
         # Fixed pixel widths (never auto-sized) and pinned (frozen) left columns, so the heads stay visible while scrolling right
-        _pl_px = {"+/-": 48, "Si No": 52, "Level 1": 215, "Level 2": 175, "Level 3": 115, "Level 4": 100}
-        def _pl_cfg(modern):
+        _pl_px = px or {"+/-": 48, "Si No": 52, "Level 1": 215, "Level 2": 175, "Level 3": 115, "Level 4": 100}
+        def _pl_cfg(modern, checkbox):
             cfg = {}
             for _c, _w in _pl_px.items():
                 _kw = dict(width=_w, pinned=True) if modern else dict(width=("small" if _w < 100 else "medium"))
-                if _c == "+/-": cfg[_c] = st.column_config.CheckboxColumn("+/-", help="Tick to expand, untick to collapse", **_kw)
+                if _c == "+/-" and checkbox: cfg[_c] = st.column_config.CheckboxColumn("+/-", help="Tick to expand, untick to collapse", **_kw)
+                elif _c == "+/-": cfg[_c] = st.column_config.TextColumn("+/-", help="Click [+] to expand, [-] to collapse", **_kw)
                 else: cfg[_c] = st.column_config.TextColumn(_c, **_kw)
             return cfg
-        _pl_args = dict(
-            width="stretch",
-            hide_index=True,
-            num_rows="fixed",
-            disabled=[c for c in styled_pl_df.columns if c != "+/-"],
-            height=min(35 * (len(styled_pl_df) + 1) + 5, 1100),
-            key=f"pl_tree_editor{sfx}_{st.session_state.get(f'pl_editor_ver{sfx}', 0)}",
-            on_change=pl_tree_toggle_cb,
-        )
-        for _data, _modern in ((_pl_view, True), (_pl_view, False), (styled_pl_df, True), (styled_pl_df, False)):   # navy / gold view first, plain table as fallback
-            try:
-                st.data_editor(_data, column_config=_pl_cfg(_modern), **_pl_args)
-                break
-            except Exception:
-                continue
+        _ver_now = st.session_state.get(f'pl_editor_ver{sfx}', 0)
+        _h = min(35 * (len(styled_pl_df) + 1) + 5, 1100)
+        _done = False
+        if st.session_state.get("pl_click_mode", True):
+            # clickable-cell table (st.dataframe with single-cell selection)
+            for _data, _modern in ((_pl_view, True), (_pl_view, False), (styled_pl_df, True), (styled_pl_df, False)):
+                try:
+                    st.dataframe(_data, column_config=_pl_cfg(_modern, False), width="stretch", hide_index=True, height=_h,
+                                 key=f"pl_tree_view{sfx}_{_ver_now}", on_select=pl_tree_click_cb, selection_mode="single-cell")
+                    _done = True
+                    break
+                except Exception:
+                    continue
+            if not _done: st.session_state["pl_click_mode"] = False       # this Streamlit version has no cell-click : use the checkbox from now on
+        if not _done:
+            _pl_args = dict(
+                width="stretch",
+                hide_index=True,
+                num_rows="fixed",
+                disabled=[c for c in styled_cb_df.columns if c != "+/-"],
+                height=_h,
+                key=f"pl_tree_editor{sfx}_{_ver_now}",
+                on_change=pl_tree_toggle_cb,
+            )
+            for _data, _modern in ((_cb_view, True), (_cb_view, False), (styled_cb_df, True), (styled_cb_df, False)):   # navy / gold view first, plain table as fallback
+                try:
+                    st.data_editor(_data, column_config=_pl_cfg(_modern, True), **_pl_args)
+                    break
+                except Exception:
+                    continue
     else:
         st.warning("No structural P&L rows selected.")
 
 with page_tab5:
     sel_pl = title_with_slicer("PL Forecast", "slicer_pl")
-    st.caption("Tick / untick the checkbox in the '+/-' column on any heading row to expand or collapse it. "
+    st.caption(("Click the [+] / [-] cell in the '+/-' column (or the heading text) on any heading row to expand or collapse it. "
+                if st.session_state.get("pl_click_mode", True) else
+                "Tick / untick the checkbox in the '+/-' column on any heading row to expand or collapse it. ") +
                "[+] = collapsed, [-] = expanded. Each heading opens independently; the three tables below have the same rows and the same expansion.")
     st.subheader("1. PL : Value (Rs in Lacs)")
     render_pl_tree(PL_VAL[sel_pl].reset_index(drop=True), "")
@@ -2114,6 +2276,18 @@ with page_tab_tl:
         st.subheader(_h)
         gdf(_d.style.format(_fmt_tl).apply(lambda r: ["font-weight: bold" if r["Term Loan"] == "Total" else ""] * len(r), axis=1),
                      width="stretch", hide_index=True, height=35 * (len(_d) + 1) + 3)
+
+with page_tab_cf:
+    st.title("Cash Flow : Forecast")
+    st.caption(("Click the [+] / [-] cell" if st.session_state.get("pl_click_mode", True) else "Tick / untick the '+/-' checkbox") +
+               " on any heading row to expand or collapse it.  Company level (all products, all RMs) - the Product slicer does not apply.  Rs in Lacs.  "
+               "Opening Cash = WC feed in M1, then the previous period's closing.  Working Capital Receipt = increase in month-end bank borrowing O/s (WC page Final Borrowing; negative = repayment).  "
+               "Collection = debtors cash inflow (Revenue page); RM payments / advances = RM Val page; expenses = Direct / Indirect Expenses pages; TL receipt, repayment and interest = TL page "
+               "(interest incl. interest during construction, paid in cash); capex = P4 / added-product capex payments + FAR asset additions; FD, tax and contingency = WC feed.  "
+               "Year 1 = M1-M12.  Headings not yet in the model show 0.")
+    if any(v < 0 for v in cf_free):
+        st.warning("Bank borrowing O/s is above the OD / CC Sanction Limit (Free Limit negative) in: " + ", ".join(display_columns[i] for i in range(17) if cf_free[i] < 0) + ".")
+    render_pl_tree(df_cf, "_cf", px={"+/-": 48, "Si No": 52, "Level 1": 230, "Level 2": 185, "Level 3": 225, "Level 4": 80})
 
 # P4 / New Capex Feed desk : Auto rows (calculated, not editable) and timing, shown under the P4 feed boxes
 if _p4_cockpit_auto:
@@ -2200,6 +2374,7 @@ else:
             pd.DataFrame([{"Term Loan": _h}]).to_excel(writer, sheet_name="TL", index=False, header=False, startrow=_r)
             _d.to_excel(writer, sheet_name="TL", index=False, startrow=_r + 1)
             _r += len(_d) + 4
+        df_cf.drop(columns=["_fmt", "_prod", "_dv"]).to_excel(writer, sheet_name="Cash Flow", index=False)
 
     st.download_button(
         label="📥 Download Updated Comprehensive Interconnected Workbook",
@@ -2222,7 +2397,7 @@ components.html(r"""
         const MAP = {"Revenue": "Sales / FG Feed", "FG": "Sales / FG Feed",
                      "RM Qt": "RM Qt Feed", "RM Val": "RM Val Feed", "Direct Expenses": "Direct Expenses Feed",
                      "Indirect Expenses": "Indirect Expenses Feed", "WC": "WC Feed", "PL": "RM Val Feed",
-                     "FAR": "FAR Feed", "TL": "TL Feed"};
+                     "FAR": "FAR Feed", "TL": "TL Feed", "CF": "WC Feed"};
         const norm = s => (s || "").replace(/\s+/g, " ").trim();
         const selectedTab = () => {
             const t = doc.querySelector('[role="tab"][aria-selected="true"]');
