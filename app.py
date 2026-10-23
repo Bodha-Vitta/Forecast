@@ -412,6 +412,27 @@ if "sidebar_tl_df" not in st.session_state:
 if "bank_chg_saved" not in st.session_state:
     st.session_state.bank_chg_saved = 0.05            # % per month on month-end outstanding (WC borrowing and TL)
 
+# ---- NEW: GST FEED (Indirect Expenses & GST Feed desk) ----
+# Expense, sale and capex values in the model are ex-GST. Sale GST % (Sales / FG Feed) and RM GST % (RM Val Feed) are reused, not fed again.
+gst_exp_heads = direct_heads + indirect_heads
+GST_RCM_HEADS = ["Carriage Outward"]                  # reverse charge : GST paid in cash and taken back as input credit in the same month
+_GST_DEF = {"Direct Wages": 0.0, "Power & Fuel": 0.0, "Repair & Maintenance": 18.0, "Carriage inward": 5.0, "Other Direct OH": 18.0,
+            "Employment Cost": 0.0, "Selling & Distribution": 18.0, "Travelling Expenses": 18.0, "Carriage Outward": 5.0,
+            "Rent": 18.0, "Insurance": 18.0, "Warehouse Exp": 18.0, "Other Admin charges": 18.0}
+if "sidebar_gst_df" not in st.session_state:
+    st.session_state.sidebar_gst_df = pd.DataFrame({
+        "Expense Head": gst_exp_heads,
+        "Group": ["Direct Expenses"] * len(direct_heads) + ["Indirect Expenses"] * len(indirect_heads),
+        "Type": ["RCM" if h in GST_RCM_HEADS else "Input" for h in gst_exp_heads],
+        "GST %": [_GST_DEF[h] for h in gst_exp_heads]})
+GST_CX_NEW = "New Capex Project (P4 / added products)"
+gst_cx_rows = [GST_CX_NEW] + add_rows                 # new capex payment + installation, then every FAR asset-addition row
+if "sidebar_gst_capex_df" not in st.session_state:
+    st.session_state.sidebar_gst_capex_df = pd.DataFrame({
+        "Capex Item": gst_cx_rows, "GST %": [0.0 if r == "Land" else 18.0 for r in gst_cx_rows]})
+if "gst_open_saved" not in st.session_state:
+    st.session_state.gst_open_saved = 6.0             # opening GST input credit on the books at M1 (Rs lacs)
+
 # -----------------------------------------------------------------------------
 # CHAPTER 2: SIDEBAR CONTROL PANEL DESK
 # -----------------------------------------------------------------------------
@@ -546,7 +567,7 @@ def _ap_inputs(feed_df, sc, rm_df, kp, dx_df, ix_df):
         sc["cust_adv"] = st.number_input("Customer Advance (%)", value=_nz(sc.get("cust_adv")), min_value=0.0, max_value=100.0, key=f"{kp}_cadv")
     with c2:
         sc["dbt_days"] = st.number_input("Credit Days : Debtors", value=_nz(sc.get("dbt_days")), min_value=0.0, key=f"{kp}_dbtd")
-        sc["tl_pct"] = st.number_input("TL Sanction & Disbursement (% of capex)", value=_nz(sc.get("tl_pct")), min_value=0.0, max_value=100.0, key=f"{kp}_tlpct")
+        sc["tl_pct"] = st.number_input("TL Sanction & Disbursement (% of capex + GST on capex)", value=_nz(sc.get("tl_pct")), min_value=0.0, max_value=100.0, key=f"{kp}_tlpct")
         sc["tl_rate"] = st.number_input("TL Interest Rate (% p.a.)", value=_nz(sc.get("tl_rate")), min_value=0.0, key=f"{kp}_tlrate")
     with c3:
         sc["tl_life"] = st.number_input("TL Repayment Period (Months)", value=_nz(sc.get("tl_life")), min_value=0.0, key=f"{kp}_tllife")
@@ -630,9 +651,11 @@ with st.sidebar:
               help=("Click to squeeze the cockpit back" if st.session_state.cockpit_wide else "Click to spread the cockpit so the feed tables are fully visible"))
     st.header("⚙️ Cockpit Feed")
     st.caption("🔴 = key-in column  |  heading without 🔴 = fixed, not editable")
+    if st.session_state.get("synchronized_sidebar_context_radio_widget") == "Indirect Expenses Feed":     # old name of the renamed desk
+        st.session_state["synchronized_sidebar_context_radio_widget"] = "Indirect Expenses & GST Feed"
     sidebar_context = st.radio(
         "Cockpit Feed",
-        options=["Sales / FG Feed", "RM Qt Feed", "RM Val Feed", "Direct Expenses Feed", "Indirect Expenses Feed", "WC Feed",
+        options=["Sales / FG Feed", "RM Qt Feed", "RM Val Feed", "Direct Expenses Feed", "Indirect Expenses & GST Feed", "WC Feed",
                  "P4 / New Capex Feed", "FAR Feed", "TL Feed", "Add Product"],
         key="synchronized_sidebar_context_radio_widget",
         on_change=_on_ctx_change,
@@ -648,7 +671,7 @@ with st.sidebar:
     edited_dx_rate_df = st.session_state.sidebar_dx_rate_df
     edited_dx_common_df = st.session_state.sidebar_dx_common_df
     edited_dx_infl_df = st.session_state.sidebar_dx_infl_df
-    # Indirect Expenses feed tables (edited only inside the Indirect Expenses Feed desk below)
+    # Indirect Expenses feed tables (edited only inside the Indirect Expenses & GST Feed desk below)
     edited_ix_df = st.session_state.sidebar_ix_df
     edited_ix_infl_df = st.session_state.sidebar_ix_infl_df
     # Debtors / creditors feeds (edited only inside the Sales / FG Feed and RM Val Feed desks below)
@@ -671,6 +694,8 @@ with st.sidebar:
     edited_p4_df, edited_p4_rm_df, p4s = st.session_state.sidebar_p4_df, st.session_state.sidebar_p4_rm_df, dict(st.session_state.p4_scalars)
     edited_far_open_df, edited_far_add_df = st.session_state.sidebar_far_open_df, st.session_state.sidebar_far_add_df
     edited_tl_df, bank_chg_pct = st.session_state.sidebar_tl_df, st.session_state.bank_chg_saved
+    # GST feeds (edited only inside the Indirect Expenses & GST Feed desk below)
+    edited_gst_df, edited_gst_capex_df, gst_open = st.session_state.sidebar_gst_df, st.session_state.sidebar_gst_capex_df, st.session_state.gst_open_saved
 
     if sidebar_context == "Sales / FG Feed":
         st.header("📊 1. Sales & FG Feed Desk")
@@ -743,14 +768,33 @@ with st.sidebar:
         st.session_state.sidebar_dx_infl_df = edited_dx_infl_df
         edited_qty_df, edited_rate_df, edited_fg_inflation_df, edited_prod_params_df, edited_bom_df, edited_rm_logistics_df, edited_rm_price_df, edited_rm_inflation_df = st.session_state.sidebar_qty_df, st.session_state.sidebar_rate_df, st.session_state.sidebar_fg_inflation_df, st.session_state.sidebar_prod_params_df, st.session_state.sidebar_bom_df, st.session_state.sidebar_rm_logistics_df, st.session_state.sidebar_rm_price_df, st.session_state.sidebar_rm_inflation_df
         g_y2, g_y3, g_y4, g_y5 = [x / 100.0 for x in st.session_state.growth_saved]
-    elif sidebar_context == "Indirect Expenses Feed":
-        st.header("🏢 5. Indirect Expenses Feed Desk")
+    elif sidebar_context == "Indirect Expenses & GST Feed":
+        st.header("🏢 5. Indirect Expenses & GST Feed Desk")
         st.caption("Initial rate - Rs per Kg sold (p.u.) or % of Sale Value, as per 'Against Sale'. Same rate for all products (P1-P4 and added products)")
         edited_ix_df = sb_editor(st.session_state.sidebar_ix_df, hide_index=True, column_config={"Expense Head": st.column_config.TextColumn(disabled=True), "Against Sale": st.column_config.TextColumn(disabled=True)})
         st.session_state.sidebar_ix_df = edited_ix_df
         st.caption("YoY inflation (%) on rate / % - Year 2 to Year 5")
         edited_ix_infl_df = sb_editor(st.session_state.sidebar_ix_infl_df, hide_index=True, column_config={"Expense Head": st.column_config.TextColumn(disabled=True)})
         st.session_state.sidebar_ix_infl_df = edited_ix_infl_df
+        # ---- NEW : GST feed (GST page) ----
+        st.markdown("---")
+        st.header("🧾 GST Feed")
+        st.caption("All expense, sale and capex values in the model are ex-GST. GST is set off and paid in the same month.")
+        gst_open = st.number_input("Opening GST Input Balance (Rs Lacs) - input credit on the books at M1", value=float(st.session_state.gst_open_saved), min_value=0.0)
+        st.session_state.gst_open_saved = gst_open
+        feed_title("GST % on Direct & Indirect Expenses - Carriage Outward is RCM (paid in cash, input credit in the same month)")
+        edited_gst_df = sb_editor(st.session_state.sidebar_gst_df, hide_index=True, column_config={
+            "Expense Head": st.column_config.TextColumn(disabled=True), "Group": st.column_config.TextColumn(disabled=True),
+            "Type": st.column_config.TextColumn(disabled=True)})
+        st.session_state.sidebar_gst_df = edited_gst_df
+        feed_title("GST % on Capex - new capex payment & installation (P4 / added products) and FAR asset additions")
+        st.caption("Land carries no GST (0%). Key 0% for any asset whose input credit is blocked (e.g. building construction, motor vehicles - Sec 17(5)).")
+        edited_gst_capex_df = sb_editor(st.session_state.sidebar_gst_capex_df, hide_index=True, column_config={"Capex Item": st.column_config.TextColumn(disabled=True)})
+        st.session_state.sidebar_gst_capex_df = edited_gst_capex_df
+        feed_title("GST % on Sale and RM Purchases - read only (key in at Sales / FG Feed and RM Val Feed)")
+        gdf(pd.DataFrame({"Item": ["Sale : Output GST", "RM Purchases : Input GST (all RMs)"],
+                          "GST %": [safe_float(gst_sales_pct), safe_float(gst_pur_pct)], "Fed in": ["Sales / FG Feed", "RM Val Feed"]}).style.format({"GST %": "{:g}%"}),
+            hide_index=True, width="stretch")
         edited_qty_df, edited_rate_df, edited_fg_inflation_df, edited_prod_params_df, edited_bom_df, edited_rm_logistics_df, edited_rm_price_df, edited_rm_inflation_df = st.session_state.sidebar_qty_df, st.session_state.sidebar_rate_df, st.session_state.sidebar_fg_inflation_df, st.session_state.sidebar_prod_params_df, st.session_state.sidebar_bom_df, st.session_state.sidebar_rm_logistics_df, st.session_state.sidebar_rm_price_df, st.session_state.sidebar_rm_inflation_df
         g_y2, g_y3, g_y4, g_y5 = [x / 100.0 for x in st.session_state.growth_saved]
     elif sidebar_context == "WC Feed":
@@ -784,7 +828,7 @@ with st.sidebar:
         _ps["completion"] = st.selectbox("Capex Installation & Commercial Run (completion month)", ["Auto"] + months[:11],
                                          index=(["Auto"] + months[:11]).index(_ps["completion"]) if _ps["completion"] in ["Auto"] + months[:11] else 0,
                                          help="Auto = month after the last capex payment. Capitalisation, production and sale start the month after completion.")
-        _ps["tl_pct"] = st.number_input("TL Sanction & Disbursement (% of capex payment)", value=float(_ps["tl_pct"]))
+        _ps["tl_pct"] = st.number_input("TL Sanction & Disbursement (% of capex payment + GST on capex)", value=float(_ps["tl_pct"]))
         _ps["op_fg"] = st.number_input("P4 Opening FG Stock Qt (M1)", value=float(_ps["op_fg"]))
         _ps["op_dbt"] = st.number_input("P4 Opening Debtors (Rs Lacs)", value=float(_ps["op_dbt"]))
         _ps["dbt_days"] = st.number_input("P4 Credit Days : Debtors", value=float(_ps["dbt_days"]))
@@ -897,6 +941,7 @@ for _p in products:
 # ---- New-capex products : P4 (P4 / New Capex Feed desk) + every product added in the Add Product desk ----
 # Each one has its own timing (completion month, start of capitalisation / production / sale), capex funding, FG / debtors / RM feeds.
 _added_by_name = {c["name"]: c for c in added_products}
+_gst_cx_new_rate = safe_float(edited_gst_capex_df.loc[edited_gst_capex_df["Capex Item"] == GST_CX_NEW, "GST %"].values) / 100.0   # GST % on new capex (GST Feed)
 NPD = {}
 for _p in new_prods:
     _grow = _feed_getter(edited_p4_df if _p == "P4" else _added_by_name[_p]["feed_df"])
@@ -904,9 +949,11 @@ for _p in new_prods:
     _pay, _inst = _grow("New Capex Payment (Rs Lacs)")[0:12], _grow("New Capex Installation Cost (Rs Lacs)")[0:12]
     _has, _last, _comp, _start, _warn = _np_timing(_pay, _inst, _sc, _p == "P4")
     _frac = min(max(safe_float(_sc.get("tl_pct", 85.0 if _p == "P4" else 0.0)), 0.0), 100.0) / 100.0
-    _disb = [(_pay[i] + _inst[i]) * _frac for i in range(12)]                                      # TL disbursement (Auto)
-    NPD[_p] = {"row": _grow, "sc": _sc, "comp": _comp, "start": _start, "warn": _warn, "capex_total": sum(_pay) + sum(_inst),
-               "tl_frac": _frac, "tl_disb": _disb, "own": [(_pay[i] + _inst[i]) - _disb[i] for i in range(12)]}   # own = capex margin & own cash contribution (Auto)
+    _cxg = [(_pay[i] + _inst[i]) * _gst_cx_new_rate for i in range(12)]                             # NEW : GST on capex payment + installation (GST Feed)
+    _disb = [(_pay[i] + _inst[i] + _cxg[i]) * _frac for i in range(12)]                             # TL disbursement (Auto) = TL % x (capex + GST on capex)
+    NPD[_p] = {"row": _grow, "sc": _sc, "comp": _comp, "start": _start, "warn": _warn, "capex_total": sum(_pay) + sum(_inst),   # capex_total = ex-GST (asset value)
+               "capex_m": [_pay[i] + _inst[i] for i in range(12)], "capex_gst": _cxg,
+               "tl_frac": _frac, "tl_disb": _disb, "own": [(_pay[i] + _inst[i] + _cxg[i]) - _disb[i] for i in range(12)]}   # own = capex margin & own cash contribution (Auto), incl. GST
 p4_row = NPD["P4"]["row"]
 p4_completion, p4_start, p4_completion_warn = NPD["P4"]["comp"], NPD["P4"]["start"], NPD["P4"]["warn"]
 p4_capex_total, p4_tl_disb, p4_own = NPD["P4"]["capex_total"], NPD["P4"]["tl_disb"], NPD["P4"]["own"]
@@ -1483,6 +1530,89 @@ def far_tables():
         out.append((head, d))
     return out
 
+# ---- NEW: GST (GST page) : input v output, closing GST balance (current asset), GST payable and cash outflow (Rs lacs) ----
+# Input GST = expense x GST % (forward-charge heads) + RM purchase GST + capex GST + RCM credit.  Output GST = sale x GST %.
+# Month by month: output is set off against opening + current input ; any balance is paid in cash ; unused input carries forward.
+# RCM (Carriage Outward) is always paid in cash and taken as input credit in the same month.
+# Year 1 : opening = M1 opening, flows = sum of months, closing = M12 closing.  Year 2-5 : opening = previous year's closing, netted annually.
+_gst_rate = {h: safe_float(r) / 100.0 for h, r in zip(edited_gst_df["Expense Head"], edited_gst_df["GST %"])}
+_gst_cx_rate = {h: safe_float(r) / 100.0 for h, r in zip(edited_gst_capex_df["Capex Item"], edited_gst_capex_df["GST %"])}
+gst_amt = {h: [sum(dx_cost[h][p][i] for p in products) for i in range(17)] for h in direct_heads}
+gst_amt.update({h: [sum(ix_cost[h][p][i] for p in products) for i in range(17)] for h in indirect_heads})
+gst_on = {h: [v * _gst_rate.get(h, 0.0) for v in gst_amt[h]] for h in gst_exp_heads}
+_gst_fwd = [h for h in gst_exp_heads if h not in GST_RCM_HEADS]
+_cx_new_m = [sum(NPD[p]["row"]("New Capex Payment (Rs Lacs)")[i] + NPD[p]["row"]("New Capex Installation Cost (Rs Lacs)")[i] for p in NPD) for i in range(12)]
+gst_cx_amt = {GST_CX_NEW: _cx_new_m + [sum(_cx_new_m)] + [0.0] * 4}
+gst_cx_amt.update({r: _add_series(r) for r in add_rows})
+gst_cx_on = {r: [v * _gst_cx_rate.get(r, 0.0) for v in gst_cx_amt[r]] for r in gst_cx_rows}
+gst_rm_amt = [sum(rm_purch_val_matrix[rm][i] for rm in raw_materials) for i in range(17)]
+gst_rm_on = [sum(crd_gst[rm][i] for rm in raw_materials) for i in range(17)]           # RM Val page : GST on purchases (paid to suppliers via creditors)
+gst_sale_amt = [sum(rev_lacs_p[p][i] for p in products) for i in range(17)]
+gst_out = [sum(dbt_gst[p][i] for p in products) for i in range(17)]                     # Revenue page : output GST on sale (collected via debtors)
+gst_vend_exp = [sum(gst_on[h][i] for h in _gst_fwd) for i in range(17)]                 # GST paid to vendors on expenses (forward charge)
+gst_vend_cx = [sum(gst_cx_on[r][i] for r in gst_cx_rows) for i in range(17)]            # GST paid to vendors on capex
+gst_rcm = [sum(gst_on[h][i] for h in GST_RCM_HEADS) for i in range(17)]                 # RCM : paid in cash = input credit
+gst_in = [gst_vend_exp[i] + gst_rm_on[i] + gst_vend_cx[i] + gst_rcm[i] for i in range(17)]   # total current input
+gst_op, gst_cl, gst_pay = [0.0] * 17, [0.0] * 17, [0.0] * 17
+def _gst_step(i, opening):
+    gst_op[i] = opening
+    avail = opening + gst_in[i]
+    gst_cl[i] = max(0.0, avail - gst_out[i])
+    gst_pay[i] = max(0.0, gst_out[i] - avail)
+_b = safe_float(gst_open)
+for _t in range(12):
+    _gst_step(_t, _b)
+    _b = gst_cl[_t]
+gst_op[12], gst_cl[12], gst_pay[12] = gst_op[0], gst_cl[11], sum(gst_pay[0:12])
+for _i in range(13, 17):
+    _gst_step(_i, gst_cl[_i - 1])                       # Year 2 opens with Year 1 closing (= M12 closing)
+gst_avail = [gst_op[i] + gst_in[i] for i in range(17)]
+gst_cash = [gst_pay[i] + gst_rcm[i] for i in range(17)]                                 # GST cash outflow to the Government (payable + RCM)
+gst_cf = [gst_cash[i] + gst_vend_exp[i] + gst_vend_cx[i] for i in range(17)]            # CF "Taxes : GST" (RM GST is already inside payments to creditors)
+
+def gst_df():
+    """GST page table in the 'GST' sheet layout : Head / Sub Head / GST % / Type / Level 2, M1-M12, Year 1-5. Returns (table, bold flags)."""
+    rows, bold = [], []
+    def add(head, sub, pct, typ, lvl2, series, b=False):
+        r = {"Head": head, "Sub Head": sub, "GST %": ("" if pct is None else f"{pct * 100:g}%"), "Type": typ, "Level 2": lvl2}
+        for i, c in enumerate(display_columns): r[c] = series[i] if series is not None else float("nan")
+        rows.append(r); bold.append(b)
+    add("", "Opening GST Balance", None, "Input", "", gst_op, True)
+    add("", "", None, "", "", None)
+    for grp, heads in (("Direct Expenses", direct_heads), ("Indirect Expenses", indirect_heads)):
+        for h in heads:
+            rcm = h in GST_RCM_HEADS
+            add(grp, h, _gst_rate.get(h, 0.0), "RCM" if rcm else "Input", "Exp amount", gst_amt[h])
+            add("", "", None, "", "GST amount (RCM credit)" if rcm else "GST amount", gst_on[h])
+    add("RM", "RM (all RMs)", safe_float(gst_pur_pct) / 100.0, "Input", "Purchase amount", gst_rm_amt)
+    add("", "", None, "", "GST amount", gst_rm_on)
+    for r in gst_cx_rows:
+        add("Capex", r, _gst_cx_rate.get(r, 0.0), "Input", "Capex amount", gst_cx_amt[r])
+        add("", "", None, "", "GST amount", gst_cx_on[r])
+    add("", "Total Current Input", None, "Input", "", gst_in, True)
+    add("", "Total Available Input", None, "Input", "", gst_avail, True)
+    add("", "", None, "", "", None)
+    add("Sale", "Sale", safe_float(gst_sales_pct) / 100.0, "Output", "Sale amount", gst_sale_amt)
+    add("", "", None, "Output", "GST amount", gst_out, True)
+    add("", "", None, "", "", None)
+    add("Current Asset", "Closing GST Balance", None, "Input", "", gst_cl, True)
+    add("", "GST Payable (after set-off)", None, "", "", gst_pay, True)
+    add("", "GST RCM (paid in cash)", None, "", "", gst_rcm, True)
+    add("Hit to CF", "GST Cash Outflow", None, "", "", gst_cash, True)
+    return pd.DataFrame(rows), bold
+
+def gst_cf_df():
+    """GST cash hitting the CF page (Taxes : GST)."""
+    rows, bold = [], []
+    for sl, lbl, s, b in (("1", "Net GST paid in cash (GST Payable after set-off)", gst_pay, False), ("2", "GST RCM paid in cash", gst_rcm, False),
+                          ("3", "GST Cash Outflow to Government (1+2)", gst_cash, True),
+                          ("4", "GST paid to vendors on Direct & Indirect Expenses", gst_vend_exp, False), ("5", "GST paid to vendors on Capex", gst_vend_cx, False),
+                          ("6", "Total GST : Hit to CF (3+4+5)", gst_cf, True)):
+        r = {"Sl No": sl, "GST : Hit to Cash Flow": lbl}
+        for i, c in enumerate(display_columns): r[c] = s[i]
+        rows.append(r); bold.append(b)
+    return pd.DataFrame(rows), bold
+
 # ---- NEW: WORKING CAPITAL (WC page) : requirement, drawing power, borrowing and interest (Rs lacs) ----
 def _feed_series(df, col, kind):
     """17 values (M1-M12, Year 1, Year 2-5) from a WC feed table keyed by Timeline. flow : Year 1 = sum of months ; bal : Year 1 = M12 value."""
@@ -1501,7 +1631,10 @@ wc_tlint  = [tl_int_tot[i] + tl_bc_tot[i] for i in _I]                          
 wc_fd     = _feed_series(edited_wc_flow_df, "FD Increment", "flow")
 wc_tax    = _feed_series(edited_wc_flow_df, "Tax Payment Provision", "flow")
 wc_cont   = _feed_series(edited_wc_flow_df, "Other Contingency Requirement", "flow")
-wc_out_items = [wc_adv, wc_pay, wc_power, wc_labour, wc_othmfg, wc_selladm, wc_tlint, wc_fd, wc_tax, wc_cont]
+wc_gst_govt = gst_cash                                                                         # NEW (GST page) : net GST paid + RCM
+wc_gst_vend = list(gst_vend_exp)                                                                # NEW (GST page) : GST paid to vendors on expenses (RM GST is inside payment to creditors).
+                                                                                                # Capex GST is NOT in WC (funded by TL / own contribution, like the capex itself)
+wc_out_items = [wc_adv, wc_pay, wc_power, wc_labour, wc_othmfg, wc_selladm, wc_tlint, wc_fd, wc_tax, wc_cont, wc_gst_govt, wc_gst_vend]
 wc_out = [sum(it[i] for it in wc_out_items) for i in _I]
 wc_in  = [sum(dbt[p]["flow"][i] for p in products) for i in _I]                                    # sale receipts (cash inflow from debtors)
 
@@ -1511,7 +1644,8 @@ wc_wip = _feed_series(edited_wc_bal_df, "Stock-in-Process", "bal")
 wc_fg  = [sum(fg_cl_val[p][i] for p in products) for i in _I]
 wc_inv = [a + b + c for a, b, c in zip(wc_rm, wc_wip, wc_fg)]
 wc_rec = [sum(dbt[p]["cl"][i] for p in products) for i in _I]
-wc_oca = _feed_series(edited_wc_bal_df, "Other Current Assets", "bal")
+wc_oca_feed = _feed_series(edited_wc_bal_df, "Other Current Assets", "bal")
+wc_oca = [a + b for a, b in zip(wc_oca_feed, gst_cl)]                                           # NEW : + closing GST input balance (GST page)
 wc_tca = [a + b + c for a, b, c in zip(wc_inv, wc_rec, wc_oca)]
 wc_cr  = [sum(crd[rm]["cl"][i] for rm in raw_materials) for i in _I]
 wc_ocl = _feed_series(edited_wc_bal_df, "Other Current Liabilities", "bal")
@@ -1565,6 +1699,8 @@ def wc_req_df():
             ("", ind + "Other mfg. Expenses", wc_othmfg, False), ("", ind + "Selling and admn OH", wc_selladm, False),
             ("", ind + "TL Interest & Bank charges", wc_tlint, False), ("", ind + "FD increament", wc_fd, False),
             ("", ind + "Tax payment provision", wc_tax, False), ("", ind + "Other Contingency requirement", wc_cont, False),
+            ("", ind + "GST : Net paid in cash + RCM (GST page)", wc_gst_govt, False),
+            ("", ind + "GST paid to vendors : expenses (GST page)", wc_gst_vend, False),
             ("2", "Cash Inflow :", wc_in, True), ("", ind + "Sale receipt : Credit", wc_in, False),
             ("3", "Cash & Bank Balance", wc_cash_op, True),
             ("4", "Net Additional WCap requirement (1-2-3)", wc_req, True)]
@@ -1574,7 +1710,7 @@ def wc_dp_df():
     ind = "\u00a0\u00a0\u00a0"
     spec = [("", "CURRENT ASSETS", None, True),
             ("", ind + "Raw Materials", wc_rm, False), ("", ind + "Stock-in-process", wc_wip, False), ("", ind + "Finished Goods", wc_fg, False),
-            ("", ind + "Total Inventory", wc_inv, False), ("", ind + "Receivables", wc_rec, False), ("", ind + "Other Current Assets", wc_oca, False),
+            ("", ind + "Total Inventory", wc_inv, False), ("", ind + "Receivables", wc_rec, False), ("", ind + "Other Current Assets (incl. GST Input balance)", wc_oca, False),
             ("1", "TOTAL CA (TCA)", wc_tca, True), ("", "", None, False),
             ("", "Current Liab other than Bank Borrowing", None, True),
             ("", ind + "Trade Creditors", wc_cr, False), ("", ind + "Other Current Liabilities", wc_ocl, False),
@@ -1794,7 +1930,7 @@ cf_rm = _vsum(*cf_rm_pay.values(), *cf_rm_adv.values())
 cf_tl_int_p = {p: [tl_int_p[p][i] + (_idc_by[p]["series"][i] if p in _idc_by else 0.0) for i in range(17)] for p in products}
 cf_fin = _vsum(*wc_int_p.values(), *cf_tl_int_p.values(), *bc_p.values())
 # Outflow : Taxes / other
-cf_tax = _vsum(wc_tax)
+cf_tax = _vsum(wc_tax, gst_cf)                     # NEW : GST (GST page) = net GST paid + RCM + GST paid to vendors on expenses & capex
 cf_oth_out = _vsum(wc_cont)
 cf_dx = _vsum(*dx_total_cost.values())
 cf_ix = _vsum(*ix_total_cost.values())
@@ -1859,7 +1995,11 @@ def build_cf():
     by_key("3", "Interest on TL", cf_tl_int_p, products, "L3", "L4")
     by_key("3", "Other (Bank Charges)", bc_p, products, "L3", "L4")
     add("", "3", "L2", "", "Taxes", "", "", cf_tax)
-    for _lbl, _s in (("GST", _Z), ("Adv Tax", wc_tax), ("Income Tax", _Z), ("Other Admin charges", _Z)):
+    add("", "3", "L3", "", "", "GST (GST page)", "", gst_cf)
+    for _lbl, _s in (("Net GST paid in cash", gst_pay), ("GST RCM paid in cash", gst_rcm),
+                     ("GST paid to vendors : expenses", gst_vend_exp), ("GST paid to vendors : capex", gst_vend_cx)):
+        add("", "3", "L4", "", "", "", _lbl, _s)
+    for _lbl, _s in (("Adv Tax", wc_tax), ("Income Tax", _Z), ("Other Admin charges", _Z)):
         add("", "3", "L3", "", "", _lbl, "", _s)
     add("", "3", "L2", "", "Other Outflow", "", "", cf_oth_out)
     add("", "3", "L3", "", "", "Other Contingency (WC feed)", "", wc_cont)
@@ -1942,7 +2082,7 @@ def ix_tables(cost_by_p, sel):
 # -----------------------------------------------------------------------------
 # CHAPTER 5: TOP PANEL NAVIGATION ROUTER & WORKSPACE VIEWPORTS
 # -----------------------------------------------------------------------------
-page_tab5, page_tab1, page_tab2, page_tab3, page_tab4, page_tab_dx, page_tab_ix, page_tab_cost, page_tab_wc, page_tab_far, page_tab_tl, page_tab_cf = st.tabs(["PL", "Revenue", "FG", "RM Qt", "RM Val", "Direct Expenses", "Indirect Expenses", "Costing", "WC", "FAR", "TL", "CF"])
+page_tab5, page_tab1, page_tab2, page_tab3, page_tab4, page_tab_dx, page_tab_ix, page_tab_cost, page_tab_wc, page_tab_far, page_tab_tl, page_tab_gst, page_tab_cf = st.tabs(["PL", "Revenue", "FG", "RM Qt", "RM Val", "Direct Expenses", "Indirect Expenses", "Costing", "WC", "FAR", "TL", "GST", "CF"])
 
 # (Streamlit tabs are client-side only, so the sidebar radio is synced by the script in CHAPTER 7.)
 
@@ -2241,7 +2381,7 @@ with page_tab_wc:
     st.caption("Company level (all products, all RMs) - the Product slicer does not apply.  Rs in Lacs.")
     st.subheader("1. Working Capital Requirement (Rs in Lacs)")
     st.caption("Cash Outflow - Cash Inflow - Cash & Bank Balance.  RM advance and payment to creditors come from the RM Val page, Power / labour / other mfg expenses from Direct Expenses, "
-               "Selling and admn OH from Indirect Expenses, TL interest & bank charges from the TL page, sale receipts from the Debtors cash flow (Revenue page).  Cash & Bank Balance = opening feed in M1, then the previous period's closing cash.")
+               "Selling and admn OH from Indirect Expenses, TL interest & bank charges from the TL page, GST cash outflow and GST paid to vendors on expenses from the GST page (capex GST is funded by TL / own contribution, not WC), sale receipts from the Debtors cash flow (Revenue page).  Cash & Bank Balance = opening feed in M1, then the previous period's closing cash.")
     show_wc_df(wc_req_df())
     st.subheader("2. Drawing Power, Borrowing & Interest on Working Capital (Rs in Lacs)")
     st.caption(f"Margin {_mpct * 100:g}% on Working Capital Gap; DP = maximum permissible borrowing.  Total Proposed Borrowing = Working Capital Requirement + Opening OD/CC (M1 = feed, then previous month's Final Borrowing).  "
@@ -2267,7 +2407,7 @@ with page_tab_far:
 
 with page_tab_tl:
     st.title("Term Loan (TL)")
-    _tl_note = "; ".join(f"{n} : disbursed {NPD[p]['tl_frac'] * 100:g}% of each capex payment, interest only up to completion ({months[NPD[p]['comp']]}), repaid from {display_columns[NPD[p]['start']]}" for n, p in tl_prod.items())
+    _tl_note = "; ".join(f"{n} : disbursed {NPD[p]['tl_frac'] * 100:g}% of each capex payment incl. GST on capex, interest only up to completion ({months[NPD[p]['comp']]}), repaid from {display_columns[NPD[p]['start']]}" for n, p in tl_prod.items())
     st.caption(f"Rs in Lacs.  Repayment = opening O/s / months of life remaining (equal principal).  Interest = opening O/s x rate / 12.  "
                f"{_tl_note}.  Interest up to completion (total {tl_idc:,.2f} L) is capitalised into the respective new Plant & Machinery.  "
                f"Bank charges = month-end O/s x {safe_float(bank_chg_pct):g}% per month.  Year 1 = M1-M12; Year 2-5 = sum of their 12 months.")
@@ -2277,13 +2417,28 @@ with page_tab_tl:
         gdf(_d.style.format(_fmt_tl).apply(lambda r: ["font-weight: bold" if r["Term Loan"] == "Total" else ""] * len(r), axis=1),
                      width="stretch", hide_index=True, height=35 * (len(_d) + 1) + 3)
 
+with page_tab_gst:
+    st.title("GST Forecast")
+    st.caption("Company level (all products, all RMs) - the Product slicer does not apply.  Rs in Lacs.  Expense, sale and capex values are ex-GST (from the Direct / Indirect Expenses, "
+               "RM Val, Revenue, P4 / Add Product and FAR pages); GST % from the Indirect Expenses & GST Feed (sale and RM rates from the Sales / FG and RM Val feeds).")
+    st.subheader("1. GST Input v Output, Current Asset, Cash Outflow (Rs in Lacs)")
+    st.caption("GST amount = amount x GST %.  Total Available Input = Opening + Current Input.  Output GST on sale is set off first against available input: "
+               "Closing GST Balance = MAX(0, Available Input - Output) (a current asset, carried to the next month and to WC Other Current Assets); "
+               "GST Payable = MAX(0, Output - Available Input), paid in cash the same month.  Carriage Outward is RCM : paid in cash and taken as input credit the same month.  "
+               "Year 1 : opening = M1, flows = sum of months, closing = M12.  Year 2-5 : opening = previous year's closing, netted annually.")
+    show_wc_df(gst_df())
+    st.subheader("2. GST : Hit to Cash Flow (Rs in Lacs)")
+    st.caption("Shown on the CF page under Taxes : GST, and in the WC cash outflow.  Expenses and capex are paid to vendors ex-GST in those pages, so the GST paid to vendors is added here.  GST on new capex (P4 / added products) is funded by the TL (TL % on capex + GST) and own contribution; capex GST is not part of the WC outflow.  "
+               "GST on RM purchases is already inside the payment to creditors (RM Val page) and output GST on sale inside the collection from debtors (Revenue page).")
+    show_wc_df(gst_cf_df())
+
 with page_tab_cf:
     st.title("Cash Flow : Forecast")
     st.caption(("Click the [+] / [-] cell" if st.session_state.get("pl_click_mode", True) else "Tick / untick the '+/-' checkbox") +
                " on any heading row to expand or collapse it.  Company level (all products, all RMs) - the Product slicer does not apply.  Rs in Lacs.  "
                "Opening Cash = WC feed in M1, then the previous period's closing.  Working Capital Receipt = increase in month-end bank borrowing O/s (WC page Final Borrowing; negative = repayment).  "
                "Collection = debtors cash inflow (Revenue page); RM payments / advances = RM Val page; expenses = Direct / Indirect Expenses pages; TL receipt, repayment and interest = TL page "
-               "(interest incl. interest during construction, paid in cash); capex = P4 / added-product capex payments + FAR asset additions; FD, tax and contingency = WC feed.  "
+               "(interest incl. interest during construction, paid in cash); capex = P4 / added-product capex payments + FAR asset additions (ex-GST); GST = GST page; FD, tax and contingency = WC feed.  "
                "Year 1 = M1-M12.  Headings not yet in the model show 0.")
     if any(v < 0 for v in cf_free):
         st.warning("Bank borrowing O/s is above the OD / CC Sanction Limit (Free Limit negative) in: " + ", ".join(display_columns[i] for i in range(17) if cf_free[i] < 0) + ".")
@@ -2292,9 +2447,12 @@ with page_tab_cf:
 # P4 / New Capex Feed desk : Auto rows (calculated, not editable) and timing, shown under the P4 feed boxes
 if _p4_cockpit_auto:
     with st.sidebar:
-        feed_title("Auto : TL Disbursement & Own Contribution (Rs Lacs), M1-M12")
-        gdf(pd.DataFrame([{"Auto": "TL Sanction & Disbursement", **dict(zip(months, p4_tl_disb))},
-                                   {"Auto": "Capex Margin & Own Cash Contribution", **dict(zip(months, p4_own))}]).style.format({m: "{:,.2f}" for m in months}),
+        feed_title("Auto : Capex, GST on Capex, TL Disbursement & Own Contribution (Rs Lacs), M1-M12 - TL % applies on capex + GST")
+        gdf(pd.DataFrame([{"Auto": "Capex (Payment + Installation)", **dict(zip(months, NPD["P4"]["capex_m"]))},
+                          {"Auto": "GST on Capex", **dict(zip(months, NPD["P4"]["capex_gst"]))},
+                          {"Auto": "Total Capex incl. GST", **dict(zip(months, [a + b for a, b in zip(NPD["P4"]["capex_m"], NPD["P4"]["capex_gst"])]))},
+                          {"Auto": "TL Sanction & Disbursement", **dict(zip(months, p4_tl_disb))},
+                          {"Auto": "Capex Margin & Own Cash Contribution", **dict(zip(months, p4_own))}]).style.format({m: "{:,.2f}" for m in months}),
                      hide_index=True, width="stretch")
         st.caption(f"Completion : {months[p4_completion]} {'(Auto)' if p4s.get('completion', 'Auto') == 'Auto' else ''}  |  "
                    f"Capitalisation, production & sale start : {display_columns[p4_start]}  |  New P&M capitalised : {p4_asset_value:,.2f} L "
@@ -2307,9 +2465,10 @@ if _ap_cockpit_auto and added_products:
         feed_title("Added products - timing & capex funding (Auto)")
         _sum_rows = [{"Product": _p, "Capex Completion": (months[NPD[_p]["comp"]] if NPD[_p]["capex_total"] > 0 else "-"),
                       "Sale & Production Start": display_columns[NPD[_p]["start"]], "Capex + Installation (Rs Lacs)": NPD[_p]["capex_total"],
+                      "GST on Capex": sum(NPD[_p]["capex_gst"]),
                       "TL Disbursed": sum(NPD[_p]["tl_disb"]), "Own Contribution": sum(NPD[_p]["own"]),
                       "New P&M Capitalised (Rs Lacs)": asset_val[_p]} for _p in added_names]
-        gdf(pd.DataFrame(_sum_rows).style.format({c: "{:,.2f}" for c in ["Capex + Installation (Rs Lacs)", "TL Disbursed", "Own Contribution", "New P&M Capitalised (Rs Lacs)"]}),
+        gdf(pd.DataFrame(_sum_rows).style.format({c: "{:,.2f}" for c in ["Capex + Installation (Rs Lacs)", "GST on Capex", "TL Disbursed", "Own Contribution", "New P&M Capitalised (Rs Lacs)"]}),
                      hide_index=True, width="stretch")
         for _p in added_names:
             if NPD[_p]["warn"]: st.warning(f"{_p} : {NPD[_p]['warn']}")
@@ -2374,6 +2533,8 @@ else:
             pd.DataFrame([{"Term Loan": _h}]).to_excel(writer, sheet_name="TL", index=False, header=False, startrow=_r)
             _d.to_excel(writer, sheet_name="TL", index=False, startrow=_r + 1)
             _r += len(_d) + 4
+        gst_df()[0].to_excel(writer, sheet_name="GST", index=False)
+        gst_cf_df()[0].to_excel(writer, sheet_name="GST", index=False, startrow=len(gst_df()[0]) + 3)
         df_cf.drop(columns=["_fmt", "_prod", "_dv"]).to_excel(writer, sheet_name="Cash Flow", index=False)
 
     st.download_button(
@@ -2396,8 +2557,8 @@ components.html(r"""
         const P = window.parent, doc = P.document;
         const MAP = {"Revenue": "Sales / FG Feed", "FG": "Sales / FG Feed",
                      "RM Qt": "RM Qt Feed", "RM Val": "RM Val Feed", "Direct Expenses": "Direct Expenses Feed",
-                     "Indirect Expenses": "Indirect Expenses Feed", "WC": "WC Feed", "PL": "RM Val Feed",
-                     "FAR": "FAR Feed", "TL": "TL Feed", "CF": "WC Feed"};
+                     "Indirect Expenses": "Indirect Expenses & GST Feed", "WC": "WC Feed", "PL": "RM Val Feed",
+                     "FAR": "FAR Feed", "TL": "TL Feed", "GST": "Indirect Expenses & GST Feed", "CF": "WC Feed"};
         const norm = s => (s || "").replace(/\s+/g, " ").trim();
         const selectedTab = () => {
             const t = doc.querySelector('[role="tab"][aria-selected="true"]');
